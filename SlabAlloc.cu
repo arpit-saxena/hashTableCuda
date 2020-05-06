@@ -28,7 +28,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	int laneID = threadIdx.x % warpSize;
 	if(laneID == lane_no){
-		BitMap * resident_bitmap = slab_alloc.bitmaps + global_memory_block_no;
+		BitMap * resident_bitmap = bitmaps + global_memory_block_no;
 		uint32_t * global_bitmap_line = resident_bitmap->bitmap + lane_no;
 		ULL i = ((1<<32)-1) ^ (1<<slab_no);
 		auto oldval = atomicAnd(global_bitmap_line, i);
@@ -36,7 +36,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 	}
 }
 
-__device__ void ResidentBlock::init(SlabAlloc s) {
+__device__ void ResidentBlock::init(SlabAlloc * s) {
 	slab_alloc = s;
 	set_superblock();
 	set();
@@ -44,7 +44,7 @@ __device__ void ResidentBlock::init(SlabAlloc s) {
 
 __device__ void ResidentBlock::set_superblock() {
 	int global_warp_id = (blockDim.x * blockIdx.x + threadIdx.x)/warpSize;
-	unsigned superblock_no = HashFunction::superblock_hash(global_warp_id, resident_changes, slab_alloc.Ns);
+	unsigned superblock_no = HashFunction::superblock_hash(global_warp_id, resident_changes, slab_alloc->Ns);
 	first_block = superblock_no<<24;
 }
 
@@ -55,7 +55,7 @@ __device__ void ResidentBlock::set() {
 	starting_addr = first_block + (memory_block_no<<10);
 	++resident_changes;
 	int laneID = threadIdx.x % warpSize;
-	BitMap * resident_bitmap = slab_alloc.bitmaps + (starting_addr>>10);
+	BitMap * resident_bitmap = slab_alloc->bitmaps + (starting_addr>>10);
 	resident_bitmap_line = resident_bitmap->bitmap[laneID];
 }
 
@@ -84,7 +84,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 		if(laneID == allocator_thread_no){
 			new_resident_bitmap_line = resident_bitmap_line ^ (1<<(--slab_no));
 			unsigned global_memory_block_no = starting_addr>>10;
-			BitMap * resident_bitmap = slab_alloc.bitmaps + global_memory_block_no;
+			BitMap * resident_bitmap = slab_alloc->bitmaps + global_memory_block_no;
 			uint32_t * global_bitmap_line = resident_bitmap->bitmap + laneID;
 			auto oldval = atomicCAS(global_bitmap_line, resident_bitmap_line, new_resident_bitmap_line);
 			if(oldval != resident_bitmap_line){

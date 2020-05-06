@@ -24,15 +24,15 @@ class SlabAlloc {		//A single object of this will reside in global memory
 };
 
 class ResidentBlock {			//Objects of this will be on thread-local memory
-		SlabAlloc slab_alloc;
+		SlabAlloc * slab_alloc;
 		Address starting_addr;		//address of the 1st memory unit of the resident block
 		Address first_block;		//address of the 1st memory block of the superblock being used by the warp
 		uint32_t resident_bitmap_line;		//local copy of the 32-bit line of the bitmap of the resident block belonging to the lane
 		int resident_changes = 0;
 	public:
-		__device__ void init(SlabAlloc);
-		__device__ void set_superblock(SlabAlloc);	//Chooses a superblock to be used by the warp
-		__device__ void set(SlabAlloc);		//Chooses a memory block from the current superblock as a resident block
+		__device__ void init(SlabAlloc *);
+		__device__ void set_superblock();	//Chooses a superblock to be used by the warp
+		__device__ void set();		//Chooses a memory block from the current superblock as a resident block
 		
 		__device__ Address warp_allocate();
 };
