@@ -8,10 +8,10 @@ BitMap::BitMap() {
 
 SlabAlloc::SlabAlloc(int ns=256) {
 	Ns = ns;
-	ULL superblock_size = 1<<(7+10+14);	//1 memory unit = 2^7 bytes, 1024 memory units = 1 memory block, 2^14 memory blocks = 1 superblock
+	ULL superblock_size = (1<<7)*Nm*Nu;	//1 memory unit = 2^7 bytes, 1024 memory units = 1 memory block, 2^14 memory blocks = 1 superblock
 	cudaMalloc(&beg_address, Ns*superblock_size);
 
-	unsigned long no_of_bitmaps = Ns*(1<<14);
+	unsigned long no_of_bitmaps = Ns*Nm;
 	BitMap * temp = new BitMap[no_of_bitmaps];
 	cudaMalloc(&bitmaps, no_of_bitmaps*sizeof(BitMap));
 	cudaMemcpy(bitmaps, temp, no_of_bitmaps*sizeof(BitMap), cudaMemcpyHostToDevice);
@@ -24,7 +24,7 @@ __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, int laneID){
 
 __device__ void SlabAlloc::deallocate(Address addr){
 	unsigned global_memory_block_no = addr >> 10;
-	unsigned memory_unit_no = addr & ((1>>10)-1);		//addr%1024, basically
+	unsigned memory_unit_no = addr & ((1<<10)-1);		//addr%1024, basically
 	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	int laneID = threadIdx.x % warpSize;
 	if(laneID == lane_no){
@@ -55,8 +55,8 @@ __device__ void ResidentBlock::set() {
 	starting_addr = first_block + (memory_block_no<<10);
 	++resident_changes;
 	int laneID = threadIdx.x % warpSize;
-	BitMap resident_bitmap = slab_alloc.bitmaps[starting_addr>>10];
-	resident_bitmap_line = resident_bitmap.bitmap[laneID];
+	BitMap * resident_bitmap = slab_alloc.bitmaps + (starting_addr>>10);
+	resident_bitmap_line = resident_bitmap->bitmap[laneID];
 }
 
 __device__ Address ResidentBlock::warp_allocate() {
@@ -65,7 +65,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 		int x = 0, laneID = threadIdx.x % warpSize;
 		while(true){		//Review this loop
 			ULL i = (1<<32) - 1;
-			uint32_t flipped_rbl = resident_bitmap_line ^ i;
+			uint32_t flipped_rbl = resident_bitmap_line ^ (uint32_t)i;
 			int slab_no = __ffs(flipped_rbl);
 			allocator_thread_no = __ffs(__ballot_sync(i, slab_no));
 			if(allocator_thread_no == 0){
@@ -97,7 +97,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 			}
 		}
 	}
-	//This means all 5 attempts to allocate memory failed as the resident block kept getting modified by another warp
+	//This means all 5 attempts to allocate memory failed as the atomicCAS call kept failing
 	//Terminate
 	std::exit(1);
 }
