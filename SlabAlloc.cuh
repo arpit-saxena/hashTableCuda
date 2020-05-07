@@ -6,20 +6,25 @@
 typedef uint32_t Address;	//32 bit address format
 typedef unsigned long long ULL;
 
-struct BitMap {
+/*
+ * Each memory block has 1024 memory units slabs, so this is essentially an
+ * array of bits which each set bit representing that the corresponding slab
+ * has been allocated
+ */
+struct MemoryBlock {
 	uint32_t bitmap[32];
-	BitMap();
+	MemoryBlock();
 };
 
 class SlabAlloc {		//A single object of this will reside in global memory
 	public:
 		uint32_t * beg_address;
-		BitMap * bitmaps;
+		MemoryBlock * bitmaps;
 		int Ns;
 		static const int Nm = 1<<14, Nu = 1<<10;
 		SlabAlloc(int);
 
-		__device__ uint32_t * SlabAddress(Address, int);
+		__device__ uint32_t * SlabAddress(Address, uint32_t);
 		__device__ void deallocate(Address);
 };
 

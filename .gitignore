@@ -10,3 +10,4 @@
 RemoteSystemsTempFiles
 .idea/
 *.o
+/Debug/
