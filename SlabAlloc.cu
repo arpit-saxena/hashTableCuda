@@ -2,20 +2,33 @@
 
 MemoryBlock::MemoryBlock() {
 	for(int i = 0; i < 32; ++i){
-		bitmap[i] = 0;
+		bitmap[i] = 0u;
 	}
 }
 
-SlabAlloc::SlabAlloc(int ns=256) {
-	Ns = ns;
-	ULL superblock_size = (1u<<7)*Nm*Nu;	//1 memory unit = 2^7 bytes, 1024 memory units = 1 memory block, 2^14 memory blocks = 1 superblock
-	cudaMalloc(&beg_address, Ns*superblock_size);
+SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) {
+	this -> numSuperBlocks = numSuperBlocks;
+	if (numSuperBlocks > maxSuperBlocks) {
+		//TODO: Better way to handle this?
+		printf("Can't allocate %d super blocks. Max is %d", numSuperBlocks, maxSuperBlocks);
+		return;
+	}
 
-	unsigned long numBlocks = Ns*Nm;
-	MemoryBlock * temp = new MemoryBlock[numBlocks];
-	cudaMalloc(&bitmaps, numBlocks*sizeof(MemoryBlock));
-	cudaMemcpy(bitmaps, temp, numBlocks*sizeof(MemoryBlock), cudaMemcpyHostToDevice);
-	delete []temp;
+	for (int i = 0; i < numSuperBlocks; i++) {
+		cudaMalloc(superBlocks + i, sizeof(SuperBlock));
+	}
+}
+
+__device__ SuperBlock * SlabAlloc::allocateSuperBlock() {
+	if (numSuperBlocks == maxSuperBlocks) {
+		//TODO Better way to handle this?
+		printf("Can't allocate more super blocks!");
+		return nullptr;
+	}
+
+	SuperBlock * ret = (SuperBlock *) malloc(sizeof(SuperBlock));
+	superBlocks[numSuperBlocks++] = ret;
+	return ret;
 }
 
 __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
@@ -51,7 +64,7 @@ __device__ void ResidentBlock::set_superblock() {
 __device__ void ResidentBlock::set() {
 	//TODO add code for adding superblocks when resident_changes reaches a threshold
 	int global_warp_id = (blockDim.x * blockIdx.x + threadIdx.x)/warpSize;
-	unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SlabAlloc::Nm);
+	unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
 	starting_addr = first_block + (memory_block_no<<10);
 	++resident_changes;
 	int laneID = threadIdx.x % warpSize;

@@ -12,17 +12,30 @@ typedef unsigned long long ULL;
  * has been allocated
  */
 struct MemoryBlock {
+	static const int numMemoryUnits = 1<<10;
 	uint32_t bitmap[32];
 	MemoryBlock();
 };
 
+struct SuperBlock {
+	static const int numMemoryBlocks = 1 << 14;
+	MemoryBlock memoryBlocks[numMemoryBlocks];
+};
+
+// NOTE: Construct the object on host and copy it to the device afterwards to be able
+// to run functions
 class SlabAlloc {		//A single object of this will reside in global memory
 	public:
+		static const int maxSuperBlocks = 1 << 8;
+
+	private:
+		int numSuperBlocks;
+		__device__ SuperBlock * allocateSuperBlock();
+		SuperBlock * superBlocks[maxSuperBlocks];
+
+	public:
 		uint32_t * beg_address;
-		MemoryBlock * bitmaps;
-		int Ns;
-		static const int Nm = 1<<14, Nu = 1<<10;
-		SlabAlloc(int);
+		SlabAlloc(int numSuperBlocks);
 
 		__device__ uint32_t * SlabAddress(Address, uint32_t);
 		__device__ void deallocate(Address);
