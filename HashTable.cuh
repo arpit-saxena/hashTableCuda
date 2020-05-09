@@ -5,7 +5,7 @@
 
 namespace Slab {
 	__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
-	extern const uint32_t EMPTY_KEY, DELETED_KEY, SEARCH_NOT_FOUND, VALID_KEY_MASK, WARP_MASK;
+	extern const uint32_t EMPTY_KEY, EMPTY_VALUE, SEARCH_NOT_FOUND, VALID_KEY_MASK, WARP_MASK;
 	extern const Address EMPTY_ADDRESS;
 }
 

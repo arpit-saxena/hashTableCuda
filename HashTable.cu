@@ -8,7 +8,7 @@ __device__ uint32_t Slab::ReadSlab(Address slab_addr, int laneID) {
 }
 
 const uint32_t Slab::EMPTY_KEY = (1llu << 32) - 1, 
-			Slab::DELETED_KEY = Slab::EMPTY_KEY - 1, 
+			Slab::EMPTY_VALUE = Slab::EMPTY_KEY, 
 			Slab::SEARCH_NOT_FOUND = Slab::EMPTY_KEY, 
 			Slab::VALID_KEY_MASK = std::bitset<32>(std::string("10101010101010101010101010101000")).to_ulong(), 
 			Slab::Slab::WARP_MASK = Slab::EMPTY_KEY;
