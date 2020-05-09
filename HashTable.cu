@@ -31,6 +31,10 @@ __global__ void HashTable::init() {
 	}
 }
 
+__device__ static uint64_t HashTableOperation::makepair(uint32_t key, uint32_t value) {
+	return ((uint64_t)key << 32) + value;
+}
+
 __device__ void HashTableOperation::init(HashTable * h, ResidentBlock * rb, Instruction ins) {
 	hashtable = h;
 	resident_block = rb;
@@ -70,7 +74,7 @@ __device__ void HashTableOperation::run() {
 }
 
 __device__ void HashTableOperation::searcher() {
-	auto found_lane = __ffs(__ballot(Slab::WARP_MASK, read_data == src_key) & Slab::VALID_KEY_MASK);
+	auto found_lane = __ffs(__ballot(Slab::VALID_KEY_MASK, read_data == src_key));
 	if(found_lane != 0) {
 		--found_lane;
 		uint32_t found_value = __shfl_sync(Slab::WARP_MASK, read_data, found_lane+1);
@@ -88,6 +92,60 @@ __device__ void HashTableOperation::searcher() {
 			}
 		}
 		else{
+			next = next_ptr;
+		}
+	}
+}
+
+__device__ void HashTableOperation::inserter() {
+	auto dest_lane = __ffs(__ballot(Slab::VALID_KEY_MASK, read_data == Slab::EMPTY_KEY));
+	if(dest_lane != 0){
+		--dest_lane;
+		auto empty_pair = makepair(Slab::EMPTY_KEY, Slab::EMPTY_VALUE);
+		if(laneID == src_lane) {
+			auto old_pair = atomicCAS((uint64_t *)SlabAddress(next, dest_lane), empty_pair, makepair(src_key, src_value));
+			if(old_pair == empty_pair) {
+				is_active = false;
+			}
+		}
+	}
+	else{
+		auto next_ptr = __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE);
+		if(next_ptr == Slab::EMPTY_ADDRESS) {
+			auto new_slab_ptr = resident_block->warp_allocate();
+			if(laneID == ADDRESS_LANE) {
+				auto oldptr = atomicCAS(SlabAddress(next, laneID), Slab::EMPTY_ADDRESS, new_slab_ptr);
+				if(oldptr != Slab::EMPTY_ADDRESS) {
+					resident_block->slab_alloc->deallocate(new_slab_ptr);
+				}
+			}
+		}
+		else {
+			next = next_ptr;
+		}
+	}
+}
+
+__device__ void HashTableOperation::deleter() {
+	uint32_t next_lane_data = __shfl_down_sync(Slab::WARP_MASK, read_data, 1);
+	auto found_lane = __ffs(__ballot(Slab::VALID_KEY_MASK, read_data == src_key && next_lane_data == src_value));
+	if(found_lane != 0) {
+		--found_lane;
+		auto existing_pair = makepair(src_key, src_value);
+		if(laneID == src_lane) {
+			auto old_pair = atomicCAS((uint64_t *)SlabAddress(next, found_lane)
+										, existing_pair, makepair(Slab::EMPTY_KEY, Slab::EMPTY_VALUE));
+			if(old_pair == existing_pair) {
+				is_active = false;
+			}
+		}
+	}
+	else {
+		auto next_ptr = __shfl_sync(Slab::WARP_MASK, ADDRESS_LANE);
+		if(next_ptr == Slab::EMPTY_ADDRESS) {
+			is_active = false;
+		}
+		else {
 			next = next_ptr;
 		}
 	}

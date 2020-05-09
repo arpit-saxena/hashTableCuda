@@ -41,6 +41,8 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 		Address next;
 		int src_lane;
 
+		__device__ static uint64_t makepair(uint32_t key, uint32_t value);
+		
 		__device__ void inserter();
 		__device__ void searcher();
 		__device__ void deleter();
