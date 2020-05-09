@@ -44,7 +44,8 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		int status = 0; // Indicates the return code of kernels of allocation code
 					   // If a function encounters an error, it sets this to non zero
 					   // See https://stackoverflow.com/questions/12521721/crashing-a-kernel-gracefully
-		static Address makeAddress(uint32_t superBlock_idx, uint32_t memoryBlock_idx, uint32_t slab_idx);
+		__device__ static Address makeAddress
+			(uint32_t superBlock_idx, uint32_t memoryBlock_idx, uint32_t slab_idx);
 	private:
 		int numSuperBlocks;
 		SuperBlock * superBlocks[maxSuperBlocks];

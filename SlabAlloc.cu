@@ -24,6 +24,7 @@ int SlabAlloc::getNumSuperBlocks() {
 	return numSuperBlocks;
 }
 
+__device__
 Address SlabAlloc::makeAddress(uint32_t superBlock_idx, uint32_t memoryBlock_idx, uint32_t slab_idx) {
 	return (superBlock_idx << 24)
 			+ (memoryBlock_idx << 10)
@@ -71,6 +72,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 		ULL i = ((1llu<<32)-1) ^ (1llu<<slab_no);
 		atomicAnd(global_bitmap_line, i);
 	}
+	// TODO Check for divergence here
 }
 
 __device__ void ResidentBlock::init(SlabAlloc * s) {
@@ -87,10 +89,9 @@ __device__ void ResidentBlock::set_superblock() {
 }
 
 __device__ void ResidentBlock::set() {
-	//TODO add code for adding superblocks when resident_changes reaches a threshold
 	if (resident_changes >= max_resident_changes) {
 		first_block = SlabAlloc::makeAddress(slab_alloc->allocateSuperBlock(), 0, 0);
-		resident_changes = 0;
+		resident_changes = -1; // So it becomes 0 after a memory block is found
 	}
 	int global_warp_id = (blockDim.x * blockIdx.x + threadIdx.x)/warpSize;
 	unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
@@ -141,6 +142,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 				return toreturn;
 			}
 		}
+
+		// TODO check for divergence on this functions return
 	}
 	//This means all 5 attempts to allocate memory failed as the atomicCAS call kept failing
 	//Terminate
