@@ -31,18 +31,26 @@ Address SlabAlloc::makeAddress(uint32_t superBlock_idx, uint32_t memoryBlock_idx
 }
 
 __device__ int SlabAlloc::allocateSuperBlock() {
-	if (numSuperBlocks == maxSuperBlocks) {
-		//TODO Better way to handle this?
-		printf("Can't allocate more super blocks!");
-		status = -1;
-		__threadfence();
-		asm("trap;");
+	int workerThreadIdx = __ffs(__activemask()) - 1;
+	int localIdx = -1;
+	if (threadIdx.x % 32 == workerThreadIdx) {
+		int numSuper = numSuperBlocks; // Get a local copy of the variable
+		if (numSuper == maxSuperBlocks) {
+			return numSuper - 1; // This is the last super block, deal with it
+		}
+
+		int idx = numSuper++;
+		SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
+		SuperBlock * oldSuperBlock = atomicCAS(superBlocks + idx, nullptr, newSuperBlock);
+		if (oldSuperBlock != nullptr) {
+			free(newSuperBlock);
+		} else {
+			atomicAdd(*numSuperBlocks, 1);
+		}
 	}
 
-	// FIXME Race condition!!
-	int idx = numSuperBlocks++;
-	superBlocks[idx] = (SuperBlock *) malloc(sizeof(SuperBlock));
-	return idx;
+	__syncwarp();
+	return __shfl_sync((1llu << 32) - 1, localIdx, workerThreadIdx);
 }
 
 __device__ Slab * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
@@ -57,7 +65,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 	unsigned memory_unit_no = addr & ((1<<10)-1);		//addr%1024, basically
 	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	int laneID = threadIdx.x % warpSize;
-	if(laneID == __ffs(__activemask())){
+	if(laneID == __ffs(__activemask()) - 1){
 		BlockBitMap * resident_bitmap = bitmaps + global_memory_block_no;
 		uint32_t * global_bitmap_line = resident_bitmap->bitmap + lane_no;
 		ULL i = ((1llu<<32)-1) ^ (1llu<<slab_no);
