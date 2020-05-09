@@ -180,6 +180,7 @@ __device__ void HashTableOperation::finder() {
 		else if(found_value_lanes.test(laneID)) {
 			to_write = read_data;
 		}
+		__syncwarp();
 		*SlabAddress(next_result, laneID) = to_write;
 		next_result = __shfl_sync(Slab::WARP_MASK, to_write, ADDRESS_LANE);
 		next = __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE);
@@ -196,6 +197,7 @@ __device__ void HashTableOperation::finder() {
 				instr.foundvalues[no_of_values_added + read_data] = next_lane_data;
 			}
 		}
+		__syncwarp();
 		no_of_values_added += __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE - 1);
 		next_result = __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE);
 		resident_block->slab_alloc->deallocate(result_list);
