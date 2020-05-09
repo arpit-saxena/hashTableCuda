@@ -57,7 +57,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 	unsigned memory_unit_no = addr & ((1<<10)-1);		//addr%1024, basically
 	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	int laneID = threadIdx.x % warpSize;
-	if(laneID == lane_no){
+	if(laneID == __ffs(__activemask())){
 		BlockBitMap * resident_bitmap = bitmaps + global_memory_block_no;
 		uint32_t * global_bitmap_line = resident_bitmap->bitmap + lane_no;
 		ULL i = ((1llu<<32)-1) ^ (1llu<<slab_no);
