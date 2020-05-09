@@ -23,11 +23,13 @@ struct Instruction {
 	enum Type {
 		Insert,
 		Delete,
-		Search
+		Search,
+		FindAll
 	};
 	
 	Type type;
 	uint32_t key, value;
+	uint32_t * foundvalues;
 };
 
 class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
@@ -46,6 +48,7 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 		__device__ void inserter();
 		__device__ void searcher();
 		__device__ void deleter();
+		__device__ void finder();
 	public:
 		__device__ void init(HashTable * h, ResidentBlock * rb, Instruction ins);
 		__device__ void run();

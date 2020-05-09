@@ -67,6 +67,9 @@ __device__ void HashTableOperation::run() {
 			case Instruction::Search:
 				searcher();
 				break;
+			case Instruction::FindAll:
+				finder();
+				break;
 		}
 		old_work_queue = work_queue;
 		work_queue = __ballot(Slab::WARP_MASK, is_active);
@@ -149,4 +152,55 @@ __device__ void HashTableOperation::deleter() {
 			next = next_ptr;
 		}
 	}
+}
+
+// If some warp divergence bullshit crops up, rewrite this function to have 1 lane
+// do all the collation of the found values into an array
+__device__ void HashTableOperation::finder() {
+	Address result_list = next_result = resident_block->warp_allocate();
+	int no_of_found_values = 0;
+	while(next != Slab::EMPTY_ADDRESS) {
+		read_data = Slab::ReadSlab(next, laneID);
+		std::bitset<32> found_key_lanes(__ballot(Slab::VALID_KEY_MASK, read_data == src_key));
+		no_of_found_values += found_key_lanes.count();
+		std::bitset<32> found_value_lanes = found_key_lanes >> 1;
+		std::bitset<32> mask( (Slab::WARP_MASK) << (31-laneID) );
+		uint32_t to_write = (1llu << 32) - 1;
+		if(laneID == ADDRESS_LANE) {
+			if(read_data != Slab::EMPTY_ADDRESS) {
+				to_write = resident_block->warp_allocate();
+			}
+		}
+		else if(laneID == ADDRESS_LANE - 1) {
+			to_write = found_key_lanes.count();
+		}
+		else if(found_key_lanes.test(laneID)) {
+			to_write = (found_value_lanes & mask).count();
+		}
+		else if(found_value_lanes.test(laneID)) {
+			to_write = read_data;
+		}
+		*SlabAddress(next_result, laneID) = to_write;
+		next_result = __shfl_sync(Slab::WARP_MASK, to_write, ADDRESS_LANE);
+		next = __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE);
+	}
+
+	instr.foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));
+	next_result = result_list;
+	int no_of_values_added = 0;
+	while(next_result != Slab::EMPTY_ADDRESS) {
+		read_data = Slab::ReadSlab(next_result, laneID);
+		uint32_t next_lane_data = __shfl_down_sync(Slab::WARP_MASK, read_data, 1);
+		if(read_data != (1llu << 32) - 1) {
+			if(!(laneID & 1) && laneID != ADDRESS_LANE - 1) {
+				instr.foundvalues[no_of_values_added + read_data] = next_lane_data;
+			}
+		}
+		no_of_values_added += __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE - 1);
+		next_result = __shfl_sync(Slab::WARP_MASK, read_data, ADDRESS_LANE);
+		resident_block->slab_alloc->deallocate(result_list);
+		result_list = next_result;
+	}
+
+	is_active = false;
 }
