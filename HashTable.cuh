@@ -1,0 +1,50 @@
+#ifndef HASHTABLE_H
+#define HASHTABLE_H
+
+#include "SlabAlloc.cuh"
+
+namespace Slab {
+	__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
+}
+
+class HashTable {		// a single object of this will be made on host, and copied to global device memory
+		Address * base_slabs;
+		SlabAlloc * slab_alloc;
+		unsigned no_of_buckets;
+		__global__ void init();
+	public:
+		HashTable(int size, SlabAlloc * s);
+		friend class HashTableOperation;
+};
+
+struct Instruction {
+	enum Type {
+		Insert,
+		Delete,
+		Search
+	};
+	
+	Type type;
+	uint32_t key, value;
+};
+
+class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
+		HashTable * hashtable;
+		ResidentBlock * resident_block;
+		Instruction instr;
+		uint32_t VALID_KEY_MASK, WARP_MASK;
+		
+		bool is_active;
+		uint32_t src_key, src_value, read_data;
+		Address next;
+		int src_lane;
+
+		__device__ void inserter();
+		__device__ void searcher();
+		__device__ void deleter();
+	public:
+		__device__ void init(HashTable * h, ResidentBlock * rb, Instruction ins);
+		__device__ void run();
+}
+
+#endif /* HASHTABLE_H */
