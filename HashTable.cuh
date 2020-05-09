@@ -5,6 +5,8 @@
 
 namespace Slab {
 	__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
+	extern const uint32_t EMPTY_KEY, DELETED_KEY, SEARCH_NOT_FOUND, VALID_KEY_MASK, WARP_MASK;
+	extern const Address EMPTY_ADDRESS;
 }
 
 class HashTable {		// a single object of this will be made on host, and copied to global device memory
@@ -32,7 +34,7 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 		HashTable * hashtable;
 		ResidentBlock * resident_block;
 		Instruction instr;
-		uint32_t VALID_KEY_MASK, WARP_MASK;
+		int laneID;
 		
 		bool is_active;
 		uint32_t src_key, src_value, read_data;
