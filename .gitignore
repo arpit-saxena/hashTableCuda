@@ -11,3 +11,4 @@ RemoteSystemsTempFiles
 .idea/
 *.o
 /Debug/
+/build/
