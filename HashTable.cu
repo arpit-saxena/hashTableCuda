@@ -161,10 +161,10 @@ __device__ void HashTableOperation::finder() {
 	int no_of_found_values = 0;
 	while(next != Slab::EMPTY_ADDRESS) {
 		read_data = Slab::ReadSlab(next, laneID);
-		std::bitset<32> found_key_lanes(__ballot(Slab::VALID_KEY_MASK, read_data == src_key));
-		no_of_found_values += found_key_lanes.count();
-		std::bitset<32> found_value_lanes = found_key_lanes >> 1;
-		std::bitset<32> mask( (Slab::WARP_MASK) << (31-laneID) );
+		uint32_t found_key_lanes = __ballot(Slab::VALID_KEY_MASK, read_data == src_key);
+		no_of_found_values += __popc(found_key_lanes);
+		uint32_t found_value_lanes = found_key_lanes >> 1;
+		uint32_t mask = (Slab::WARP_MASK) << (31-laneID);
 		uint32_t to_write = (1llu << 32) - 1;
 		if(laneID == ADDRESS_LANE) {
 			if(read_data != Slab::EMPTY_ADDRESS) {
@@ -172,12 +172,12 @@ __device__ void HashTableOperation::finder() {
 			}
 		}
 		else if(laneID == ADDRESS_LANE - 1) {
-			to_write = found_key_lanes.count();
+			to_write = __popc(found_key_lanes);
 		}
-		else if(found_key_lanes.test(laneID)) {
-			to_write = (found_value_lanes & mask).count();
+		else if(found_key_lanes & 1 << (31-laneID) ) {
+			to_write = __popc(found_value_lanes & mask);
 		}
-		else if(found_value_lanes.test(laneID)) {
+		else if(found_value_lanes & 1 << (31-laneID)) {
 			to_write = read_data;
 		}
 		__syncwarp();
