@@ -46,7 +46,7 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 		if (oldSuperBlock != nullptr) {
 			free(newSuperBlock);
 		} else {
-			atomicAdd(*numSuperBlocks, 1);
+			atomicAdd(&numSuperBlocks, 1);
 		}
 	}
 
@@ -54,11 +54,11 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 	return __shfl_sync((1llu << 32) - 1, localIdx, workerThreadIdx);
 }
 
-__device__ Slab * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
+__device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
 	uint32_t slab_idx = addr & ((1 << 10) - 1);
 	uint32_t block_idx = (addr >> 10) & ((1 << 14) - 1);
 	uint32_t superBlock_idx = (addr >> 24);
-	return (superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs) + slab_idx;
+	return (superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
 }
 
 __device__ void SlabAlloc::deallocate(Address addr){
@@ -77,6 +77,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 
 __device__ void ResidentBlock::init(SlabAlloc * s) {
 	slab_alloc = s;
+	resident_changes = -1;
 	set_superblock();
 	set();
 }
@@ -150,4 +151,6 @@ __device__ Address ResidentBlock::warp_allocate() {
 	slab_alloc->status = 2;
 	__threadfence();
 	asm("trap;");
+
+	return (1llu << 32) - 1;
 }

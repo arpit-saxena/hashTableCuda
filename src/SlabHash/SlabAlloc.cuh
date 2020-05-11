@@ -55,7 +55,7 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
 		__device__ int allocateSuperBlock(); // Returns new super block's index
 		__device__ __host__ int getNumSuperBlocks();
-		__device__ Slab * SlabAddress(Address, uint32_t);
+		__device__ uint32_t * SlabAddress(Address, uint32_t);
 		__device__ void deallocate(Address);
 };
 
@@ -64,7 +64,7 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 		Address starting_addr;		//address of the 1st memory unit of the resident block
 		Address first_block;		//address of the 1st memory block of the superblock being used by the warp
 		uint32_t resident_bitmap_line;		//local copy of the 32-bit line of the bitmap of the resident block belonging to the lane
-		int resident_changes = 0;
+		int resident_changes;
 
 	public:
 		static const int max_resident_changes = 6;
