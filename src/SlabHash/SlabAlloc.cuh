@@ -24,6 +24,7 @@ struct BlockBitMap {
 
 struct Slab {
 	uint32_t arr[32];
+	__host__ __device__ Slab();
 };
 
 struct MemoryBlock {
@@ -37,7 +38,10 @@ struct SuperBlock {
 };
 
 // NOTE: Construct the object on host and copy it to the device afterwards to be able
-// to run functions
+// to run functions. Also, make sure the argument 'numSuperBlocks' passed to the ctor
+// must be equal to the total no. of warps in the kernel that will be using this
+// object, to ensure no superblocks remain unallocated throughtout the lifetime of
+// this object
 class SlabAlloc {		//A single object of this will reside in global memory
 	public:
 		static const int maxSuperBlocks = 1 << 8;

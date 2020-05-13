@@ -1,9 +1,11 @@
 #include "SlabAlloc.cuh"
 
 BlockBitMap::BlockBitMap() {
-	for(int i = 0; i < 32; ++i){
-		bitmap[i] = 0u;
-	}
+	memset(bitmap, 0, 32*sizeof(uint32_t));
+}
+
+__host__ __device__ Slab::Slab() {
+	memset(arr, (1llu << 32) - 1, 32*sizeof(uint32_t));
 }
 
 SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) {
@@ -15,7 +17,9 @@ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) {
 	}
 
 	for (int i = 0; i < numSuperBlocks; i++) {
+		SuperBlock sb;
 		cudaMalloc(superBlocks + i, sizeof(SuperBlock));
+		cudaMemcpy(superBlocks + i, &sb , sizeof(SuperBlock), cudaMemcpyDefault);
 	}
 }
 
@@ -41,10 +45,10 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 		}
 
 		int idx = numSuper++;
-		SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
+		SuperBlock * newSuperBlock = new SuperBlock();
 		SuperBlock * oldSuperBlock = atomicCAS(superBlocks + idx, nullptr, newSuperBlock);
 		if (oldSuperBlock != nullptr) {
-			free(newSuperBlock);
+			delete newSuperBlock;
 		} else {
 			atomicAdd(&numSuperBlocks, 1);
 		}
@@ -83,9 +87,8 @@ __device__ void ResidentBlock::init(SlabAlloc * s) {
 }
 
 __device__ void ResidentBlock::set_superblock() {
-	int global_warp_id = (blockDim.x * blockIdx.x + threadIdx.x)/warpSize;
-	unsigned superblock_no = HashFunction::superblock_hash
-			(global_warp_id, resident_changes, slab_alloc->getNumSuperBlocks());
+	int global_warp_id = (blockDim.x/warpSize) * blockIdx.x + (threadIdx.x/warpSize);
+	unsigned superblock_no = global_warp_id/SuperBlock::numMemoryBlocks;
 	first_block = superblock_no<<24;
 }
 
@@ -94,7 +97,7 @@ __device__ void ResidentBlock::set() {
 		first_block = SlabAlloc::makeAddress(slab_alloc->allocateSuperBlock(), 0, 0);
 		resident_changes = -1; // So it becomes 0 after a memory block is found
 	}
-	int global_warp_id = (blockDim.x * blockIdx.x + threadIdx.x)/warpSize;
+	int global_warp_id = (blockDim.x/warpSize) * blockIdx.x + (threadIdx.x/warpSize);
 	unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
 	starting_addr = first_block + (memory_block_no<<10);
 	++resident_changes;
