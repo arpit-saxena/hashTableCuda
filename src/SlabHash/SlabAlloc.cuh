@@ -56,6 +56,7 @@ class SlabAlloc {		//A single object of this will reside in global memory
 
 	public:
 		SlabAlloc(int numSuperBlocks);
+		__device__ void cleanup();
 		BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
 		__device__ int allocateSuperBlock(); // Returns new super block's index
 		__device__ __host__ int getNumSuperBlocks();

@@ -23,6 +23,13 @@ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) {
 	}
 }
 
+__device__
+void SlabAlloc::cleanup() {
+	for (int i = 0; i < numSuperBlocks; i++) {
+		cudaFree(superBlocks[i]);
+	}
+}
+
 __device__ __host__
 int SlabAlloc::getNumSuperBlocks() {
 	return numSuperBlocks;
