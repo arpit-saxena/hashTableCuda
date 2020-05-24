@@ -50,16 +50,16 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 	if (threadIdx.x % 32 == workerThreadIdx) {
 		int numSuper = numSuperBlocks; // Get a local copy of the variable
 		if (numSuper == maxSuperBlocks) {
-			return numSuper - 1; // This is the last super block, deal with it
-		}
-
-		int idx = numSuper++;
-		SuperBlock * newSuperBlock = new SuperBlock();
-		SuperBlock * oldSuperBlock = atomicCAS(superBlocks + idx, nullptr, newSuperBlock);
-		if (oldSuperBlock != nullptr) {
-			delete newSuperBlock;
+			localIdx = numSuper - 1; // This is the last super block, deal with it
 		} else {
-			atomicAdd(&numSuperBlocks, 1);
+			localIdx = numSuper++;
+			SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
+			SuperBlock * oldSuperBlock = atomicCAS(superBlocks + localIdx, nullptr, newSuperBlock);
+			if (oldSuperBlock != nullptr) {
+				free(newSuperBlock);
+			} else {
+				atomicAdd(&numSuperBlocks, 1);
+			}
 		}
 	}
 
