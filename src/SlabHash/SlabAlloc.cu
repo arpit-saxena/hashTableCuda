@@ -1,12 +1,14 @@
 #include "SlabAlloc.cuh"
 #include "HashFunction.cuh"
+#include <stdio.h>
+#include <assert.h>
 
 BlockBitMap::BlockBitMap() {
 	memset(bitmap, 0, 32*sizeof(uint32_t));
 }
 
 __host__ __device__ Slab::Slab() {
-	memset(arr, (1llu << 32) - 1, 32*sizeof(uint32_t));
+	memset(arr, (1llu << 32) - 1, 32*sizeof(uint32_t)); // FIXME: Wrong usage of memset
 }
 
 SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) {
@@ -27,7 +29,7 @@ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) {
 __device__
 void SlabAlloc::cleanup() {
 	for (int i = 0; i < numSuperBlocks; i++) {
-		cudaFree(superBlocks[i]);
+		free(superBlocks[i]);
 	}
 }
 
@@ -55,7 +57,7 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 		} else {
 			localIdx = numSuper++;
 			SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
-			SuperBlock * oldSuperBlock = atomicCAS(superBlocks + localIdx, nullptr, newSuperBlock);
+			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (superBlocks + localIdx), (ULL) nullptr, (ULL) newSuperBlock);
 			if (oldSuperBlock != nullptr) {
 				free(newSuperBlock);
 			} else {

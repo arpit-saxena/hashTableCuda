@@ -1,12 +1,16 @@
 #ifndef HASHTABLE_H
 #define HASHTABLE_H
 
+#include <cstdint>
 #include "SlabAlloc.cuh"
+
+typedef unsigned long long ULL;
 
 namespace hashtbl {
 	__global__ void init_table(int, SlabAlloc *, Address *);
-	extern const uint32_t EMPTY_KEY, EMPTY_VALUE, SEARCH_NOT_FOUND, VALID_KEY_MASK, WARP_MASK;
-	extern const Address EMPTY_ADDRESS;
+	void init_consts();
+	__constant__ __device__ extern uint32_t EMPTY_KEY, EMPTY_VALUE, SEARCH_NOT_FOUND, VALID_KEY_MASK, WARP_MASK;
+	__constant__ __device__ extern Address EMPTY_ADDRESS;
 }
 
 class HashTable {		// a single object of this will be made on host, and copied to global device memory
@@ -43,7 +47,7 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	int src_lane;
 
 
-	__device__ static uint64_t makepair(uint32_t key, uint32_t value);
+	__device__ static ULL makepair(uint32_t key, uint32_t value);
 	__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
 	__device__ uint32_t * SlabAddress(Address slab_addr, int laneID);
 

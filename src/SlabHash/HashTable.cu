@@ -1,21 +1,39 @@
 #include "HashTable.cuh"
 #include "HashFunction.cuh"
 #include <bitset>
+#include <assert.h>
 
 #define ADDRESS_LANE 31
 
-const uint32_t hashtbl::EMPTY_KEY = (1llu << 32) - 1, 
-			hashtbl::EMPTY_VALUE = hashtbl::EMPTY_KEY, 
-			hashtbl::SEARCH_NOT_FOUND = hashtbl::EMPTY_KEY, 
-			hashtbl::VALID_KEY_MASK = std::bitset<32>(std::string("10101010101010101010101010101000")).to_ulong(), 
-			hashtbl::WARP_MASK = hashtbl::EMPTY_KEY;
-const Address hashtbl::EMPTY_ADDRESS = hashtbl::EMPTY_KEY;
+uint32_t hashtbl::EMPTY_KEY,
+		hashtbl::EMPTY_VALUE,
+		hashtbl::SEARCH_NOT_FOUND,
+		hashtbl::VALID_KEY_MASK,
+		hashtbl::WARP_MASK;
+Address hashtbl::EMPTY_ADDRESS;
+
+void hashtbl::init_consts() {
+	uint32_t empty_key = (1llu << 32) - 1,
+		     empty_value = empty_key,
+			 search_not_found = empty_key,
+			 valid_key_mask = std::bitset<32>(std::string("10101010101010101010101010101000")).to_ulong(),
+			 warp_mask = empty_key;
+	Address empty_address = empty_key;
+
+	cudaMemcpyToSymbol(EMPTY_KEY, &empty_key, sizeof(EMPTY_KEY));
+	cudaMemcpyToSymbol(EMPTY_VALUE, &empty_value, sizeof(EMPTY_VALUE));
+	cudaMemcpyToSymbol(SEARCH_NOT_FOUND, &search_not_found, sizeof(SEARCH_NOT_FOUND));
+	cudaMemcpyToSymbol(VALID_KEY_MASK, &valid_key_mask, sizeof(VALID_KEY_MASK));
+	cudaMemcpyToSymbol(WARP_MASK, &warp_mask, sizeof(WARP_MASK));
+	cudaMemcpyToSymbol(EMPTY_ADDRESS, &empty_address, sizeof(EMPTY_ADDRESS));
+}
 
 HashTable::HashTable(int size, SlabAlloc * s) {
 	no_of_buckets = size;
 	slab_alloc = s;
 	cudaMalloc(&base_slabs, no_of_buckets*sizeof(Address));
 	int threads_per_block = 32 /* warp size */ , blocks = no_of_buckets;
+	hashtbl::init_consts();
 	hashtbl::init_table<<<blocks, threads_per_block>>>(no_of_buckets, slab_alloc, base_slabs);
 }
 
@@ -28,8 +46,8 @@ __global__ void hashtbl::init_table(int no_of_buckets, SlabAlloc * slab_alloc, A
 	}
 }
 
-__device__ uint64_t HashTableOperation::makepair(uint32_t key, uint32_t value) {
-	return ((uint64_t)key << 32) + value;
+__device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
+	return ((ULL)key << 32) + value;
 }
 
 __device__ uint32_t HashTableOperation::ReadSlab(Address slab_addr, int laneID) {
@@ -111,7 +129,7 @@ __device__ void HashTableOperation::inserter() {
 		--dest_lane;
 		auto empty_pair = makepair(hashtbl::EMPTY_KEY, hashtbl::EMPTY_VALUE);
 		if(laneID == src_lane) {
-			auto old_pair = atomicCAS((uint64_t *)SlabAddress(next, dest_lane), empty_pair, makepair(src_key, src_value));
+			auto old_pair = atomicCAS((ULL *)SlabAddress(next, dest_lane), empty_pair, makepair(src_key, src_value));
 			if(old_pair == empty_pair) {
 				is_active = false;
 			}
@@ -122,7 +140,7 @@ __device__ void HashTableOperation::inserter() {
 		if(next_ptr == hashtbl::EMPTY_ADDRESS) {
 			auto new_slab_ptr = resident_block->warp_allocate();
 			if(laneID == ADDRESS_LANE) {
-				auto oldptr = atomicCAS(SlabAddress(next, laneID), hashtbl::EMPTY_ADDRESS, new_slab_ptr);
+				auto oldptr = atomicCAS((ULL *) SlabAddress(next, laneID), hashtbl::EMPTY_ADDRESS, new_slab_ptr);
 				if(oldptr != hashtbl::EMPTY_ADDRESS) {
 					hashtable->slab_alloc->deallocate(new_slab_ptr);
 				}
@@ -141,7 +159,7 @@ __device__ void HashTableOperation::deleter() {
 		--found_lane;
 		auto existing_pair = makepair(src_key, src_value);
 		if(laneID == src_lane) {
-			auto old_pair = atomicCAS((uint64_t *)SlabAddress(next, found_lane)
+			auto old_pair = atomicCAS((ULL *)SlabAddress(next, found_lane)
 										, existing_pair, makepair(hashtbl::EMPTY_KEY, hashtbl::EMPTY_VALUE));
 			if(old_pair == existing_pair) {
 				is_active = false;
