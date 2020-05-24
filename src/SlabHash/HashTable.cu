@@ -1,4 +1,5 @@
 #include "HashTable.cuh"
+#include "HashFunction.cuh"
 #include <bitset>
 
 #define ADDRESS_LANE 31

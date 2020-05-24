@@ -1,4 +1,5 @@
 #include "SlabAlloc.cuh"
+#include "HashFunction.cuh"
 
 BlockBitMap::BlockBitMap() {
 	memset(bitmap, 0, 32*sizeof(uint32_t));
