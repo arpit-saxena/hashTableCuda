@@ -12,7 +12,7 @@ __host__ HashTable::HashTable(int size, SlabAlloc * s) {
 }
 
 __global__ void hashtbl::init_table(int no_of_buckets, SlabAlloc * slab_alloc, Address * base_slabs) {
-	ResidentBlock rb;	rb.init(slab_alloc);
+	ResidentBlock rb(slab_alloc);
 	int i = blockIdx.x;
 	while (i < no_of_buckets) {
 		base_slabs[i] = rb.warp_allocate();
@@ -40,7 +40,7 @@ __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int lan
 	return hashtable->slab_alloc->SlabAddress(slab_addr, laneID);
 }
 
-__device__ void HashTableOperation::init(HashTable * h, ResidentBlock * rb, Instruction ins) {
+__device__ HashTableOperation::HashTableOperation(HashTable * h, ResidentBlock * rb, Instruction ins) {
 	hashtable = h;
 	resident_block = rb;
 	instr = ins;

@@ -62,7 +62,7 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	__device__ void deleter();
 	__device__ void finder();
 public:
-	__device__ void init(HashTable * h, ResidentBlock * rb, Instruction ins);
+	__device__ HashTableOperation(HashTable * h, ResidentBlock * rb, Instruction ins);
 	__device__ void run();
 };
 

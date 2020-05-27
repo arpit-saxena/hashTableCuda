@@ -97,7 +97,7 @@ __device__ void SlabAlloc::deallocate(Address addr){
 	// TODO Check for divergence here
 }
 
-__device__ void ResidentBlock::init(SlabAlloc * s) {
+__device__ ResidentBlock::ResidentBlock(SlabAlloc * s) {
 	slab_alloc = s;
 	resident_changes = -1;
 	set_superblock();

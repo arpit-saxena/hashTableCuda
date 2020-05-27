@@ -87,7 +87,7 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 	public:
 		static const int max_resident_changes = 6;
 
-		__device__ void init(SlabAlloc *);
+		__device__ ResidentBlock(SlabAlloc *);
 		__device__ void set_superblock();	//Chooses a superblock to be used by the warp
 		__device__ void set();		//Chooses a memory block from the current superblock as a resident block
 		
