@@ -4,13 +4,16 @@
 #include <cstdint>
 #include "SlabAlloc.cuh"
 
+#define ADDRESS_LANE 31
+#define EMPTY_KEY (uint32_t)((1llu << 32) - 1)
+#define EMPTY_VALUE EMPTY_KEY
+#define SEARCH_NOT_FOUND EMPTY_KEY
+#define VALID_KEY_MASK (uint32_t)(0xAAAAAAA8)
+
 typedef unsigned long long ULL;
 
 namespace hashtbl {
 	__global__ void init_table(int, SlabAlloc *, Address *);
-	void init_consts();
-	__constant__ __device__ extern uint32_t EMPTY_KEY, EMPTY_VALUE, SEARCH_NOT_FOUND, VALID_KEY_MASK, WARP_MASK;
-	__constant__ __device__ extern Address EMPTY_ADDRESS;
 }
 
 class HashTable {		// a single object of this will be made on host, and copied to global device memory
@@ -18,7 +21,8 @@ class HashTable {		// a single object of this will be made on host, and copied t
 		SlabAlloc * slab_alloc;
 		unsigned no_of_buckets;
 	public:
-		HashTable(int size, SlabAlloc * s);
+		__host__ HashTable(int size, SlabAlloc * s);
+		__host__ ~HashTable();
 		friend class HashTableOperation;
 };
 
@@ -32,7 +36,9 @@ struct Instruction {
 	
 	Type type;
 	uint32_t key, value;
-	uint32_t * foundvalues;
+	uint32_t * foundvalues = nullptr;		//Will be set to point to an array in global memory by finder
+
+	__device__ ~Instruction();
 };
 
 class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads

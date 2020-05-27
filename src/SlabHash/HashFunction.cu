@@ -15,7 +15,7 @@ namespace {
 
 __device__
 uint32_t HashFunction::memoryblock_hash(uint32_t global_warp_id, int resident_changes, uint32_t wrap){
-	ULL data = ((ULL) global_warp_id) << 32 + resident_changes;
+	ULL data = (((ULL) global_warp_id) << 32) + resident_changes;
 	return ::hash(data) % wrap;
 }
 

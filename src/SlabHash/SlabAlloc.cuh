@@ -3,12 +3,21 @@
 
 #include <cstdint>
 
+#define WARP_MASK (uint32_t)((1llu << 32) - 1)
+#define EMPTY_ADDRESS (Address)WARP_MASK
+
+#define SLAB_BITS 10
+#define MEMORYBLOCK_BITS 8
+#define SUPERBLOCK_BITS 14
+
+#define CEILDIV(a, b) (a/b) + (a % b != 0)
+
 /*
  * Address is a representation of 64 bit addresses in 32 bits
  * From the least significant bit
- * - First 10 bits represent Slab's index within a memory block
- * - Next 14 bits represent Block's index within a super block
- * - Last 8 bits represent the super block's index
+ * - First SLAB_BITS bits represent Slab's index within a memory block
+ * - Next MEMORYBLOCK_BITS bits represent Block's index within a super block
+ * - Last SUPERBLOCK_BITS bits represent the super block's index
  */
 typedef uint32_t Address;	//32 bit address format
 typedef unsigned long long ULL;
@@ -33,7 +42,7 @@ struct MemoryBlock {
 };
 
 struct SuperBlock {
-	static const int numMemoryBlocks = 1 << 14;
+	static const int numMemoryBlocks = 1 << MEMORYBLOCK_BITS;
 	MemoryBlock memoryBlocks[numMemoryBlocks];
 };
 
@@ -44,7 +53,8 @@ struct SuperBlock {
 // this object
 class SlabAlloc {		//A single object of this will reside in global memory
 	public:
-		static const int maxSuperBlocks = 1 << 8;
+		static const int maxSuperBlocks = (1 << SUPERBLOCK_BITS) - 1;	// The last superblock will not be allocated, this 
+														// ensures EMPTY_ADDRESS is an invalid address
 		int status = 0;	// Indicates the return code of kernels of allocation code
 						// If a function encounters an error, it sets this to non zero
 						// See https://stackoverflow.com/questions/12521721/crashing-a-kernel-gracefully
@@ -52,13 +62,15 @@ class SlabAlloc {		//A single object of this will reside in global memory
 			(uint32_t superBlock_idx, uint32_t memoryBlock_idx, uint32_t slab_idx);
 	private:
 		int numSuperBlocks;
+		const int initNumSuperBlocks;
 		SuperBlock * superBlocks[maxSuperBlocks];
 
 	public:
-		SlabAlloc(int numSuperBlocks);
-		__device__ void cleanup();
+		__host__ SlabAlloc(int numSuperBlocks);
+		__host__ ~SlabAlloc();
+		__device__ void cleanup();	// Frees up the additional superblocks malloc'ed by allocateSuperBlock()
 		BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
-		__device__ int allocateSuperBlock(); // Returns new super block's index
+		__device__ int allocateSuperBlock();	// Returns new super block's index
 		__device__ __host__ int getNumSuperBlocks();
 		__device__ uint32_t * SlabAddress(Address, uint32_t);
 		__device__ void deallocate(Address);
