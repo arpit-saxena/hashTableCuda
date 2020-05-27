@@ -156,16 +156,13 @@ __device__ Address ResidentBlock::warp_allocate() {
 		}
 
 		if(laneID == allocator_thread_no){
-			auto new_resident_bitmap_line = resident_bitmap_line ^ (1<<slab_no);
+			uint32_t i = 1 << slab_no;
 			auto global_memory_block_no = starting_addr>>SLAB_BITS;
 			BlockBitMap * resident_bitmap = slab_alloc->bitmaps + global_memory_block_no;
 			uint32_t * global_bitmap_line = resident_bitmap->bitmap + laneID;
-			auto oldval = atomicCAS(global_bitmap_line, resident_bitmap_line, new_resident_bitmap_line);
-			if(oldval != resident_bitmap_line){
-				resident_bitmap_line = oldval;
-			}
-			else{
-				resident_bitmap_line = new_resident_bitmap_line;
+			auto oldval = atomicOr(global_bitmap_line, i );
+			resident_bitmap_line = oldval | i;
+			if(oldval & i == 0){
 				allocated_address = starting_addr + (laneID<<5) + slab_no;
 			}
 		}
