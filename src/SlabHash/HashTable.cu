@@ -26,6 +26,7 @@ __host__ HashTable::~HashTable() {
 
 __device__ Instruction::~Instruction() {
 	if(foundvalues)	free(foundvalues);
+	foundvalues = nullptr;
 }
 
 __device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
@@ -172,9 +173,11 @@ __device__ void HashTableOperation::finder() {
 		uint32_t found_value_lanes = found_key_lanes >> 1;
 		uint32_t mask = (WARP_MASK) << (31-laneID);
 		uint32_t to_write = (1llu << 32) - 1;
-		if(laneID == ADDRESS_LANE) {
-			if(read_data != EMPTY_ADDRESS) {
-				to_write = resident_block->warp_allocate();
+		next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
+		if(next != EMPTY_ADDRESS) {
+			uint32_t nextslab = resident_block->warp_allocate();
+			if(laneID == ADDRESS_LANE) {
+				to_write = nextslab;
 			}
 		}
 		else if(laneID == ADDRESS_LANE - 1) {
@@ -189,7 +192,6 @@ __device__ void HashTableOperation::finder() {
 		__syncwarp();
 		*SlabAddress(next_result, laneID) = to_write;
 		next_result = __shfl_sync(WARP_MASK, to_write, ADDRESS_LANE);
-		next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 	}
 
 	instr.foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));

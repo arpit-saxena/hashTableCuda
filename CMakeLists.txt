@@ -24,5 +24,5 @@ FILE(GLOB_RECURSE TEST_SOURCES
 	tests/SlabHash/*.h)
 	
 add_executable(test_slab ${TEST_SOURCES} ${SLABHASH_SOURCES})
-target_link_libraries(test_slab ${CONAN_LIBS})  
+#target_link_libraries(test_slab ${CONAN_LIBS})  
 set_target_properties(test_slab PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

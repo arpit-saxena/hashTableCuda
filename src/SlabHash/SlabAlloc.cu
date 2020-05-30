@@ -8,7 +8,7 @@ BlockBitMap::BlockBitMap() {
 }
 
 __host__ __device__ Slab::Slab() {
-	memset(arr, (1llu << 32) - 1, 32*sizeof(uint32_t)); // FIXME: Wrong usage of memset
+	memset(arr, 0xFF, 32*sizeof(uint32_t));
 }
 
 __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSuperBlocks(numSuperBlocks) {
@@ -17,6 +17,10 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 		//TODO: Better way to handle this?
 		printf("Can't allocate %d super blocks. Max is %d", numSuperBlocks, maxSuperBlocks);
 		return;
+	}
+
+	for(int i = 0; i < maxSuperBlocks; ++i) {
+		superBlocks[i] = nullptr;
 	}
 
 	for (int i = 0; i < numSuperBlocks; i++) {
@@ -28,14 +32,16 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 
 __host__ SlabAlloc::~SlabAlloc() {
 	for (int i = 0; i < initNumSuperBlocks; i++) {
-		cudaFree(superBlocks[i]);
+		if(superBlocks[i])	cudaFree(superBlocks[i]);
+		superBlocks[i] = nullptr;
 	}
 }
 
 __device__
 void SlabAlloc::cleanup() {
 	for (int i = initNumSuperBlocks; i < numSuperBlocks; i++) {
-		free(superBlocks[i]);
+		if(superBlocks[i])	free(superBlocks[i]);
+		superBlocks[i] = nullptr;
 	}
 }
 
@@ -84,17 +90,28 @@ __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
 	return (superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
 }
 
-__device__ void SlabAlloc::deallocate(Address addr){
+__device__ void SlabAlloc::deallocate(Address addr){		//Doesn't need a full warp
 	unsigned global_memory_block_no = addr >> SLAB_BITS;
 	unsigned memory_unit_no = addr & ((1<<SLAB_BITS)-1);		//addr%1024, basically
 	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	int laneID = threadIdx.x % warpSize;
 	if(laneID == __ffs(__activemask()) - 1){
+		wipeSlab(addr);
 		BlockBitMap * resident_bitmap = bitmaps + global_memory_block_no;
 		uint32_t * global_bitmap_line = resident_bitmap->bitmap + lane_no;
 		atomicAnd(global_bitmap_line, ~(1u << slab_no));
 	}
 	// TODO Check for divergence here
+}
+
+__device__ void SlabAlloc::wipeSlab(Address addr) {			//Doesn't need a full warp
+	uint32_t slab_idx = addr & ((1 << SLAB_BITS) - 1);
+	uint32_t block_idx = (addr >> SLAB_BITS) & ((1 << MEMORYBLOCK_BITS) - 1);
+	uint32_t superBlock_idx = (addr >> (SLAB_BITS + MEMORYBLOCK_BITS));
+	auto slabarr = superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr;
+	if (threadIdx.x % warpSize == __ffs(__activemask()) - 1) {
+		memset(slabarr, 0xFF, 32 * sizeof(uint32_t));
+	}
 }
 
 __device__ ResidentBlock::ResidentBlock(SlabAlloc * s) {

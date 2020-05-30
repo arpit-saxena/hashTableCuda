@@ -65,6 +65,8 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		const int initNumSuperBlocks;
 		SuperBlock * superBlocks[maxSuperBlocks];
 
+		__device__ void wipeSlab(Address);		// Wipes the contents of a Slab(sets all its bits to 1)
+
 	public:
 		__host__ SlabAlloc(int numSuperBlocks);
 		__host__ ~SlabAlloc();
