@@ -10,7 +10,7 @@
 #define MEMORYBLOCK_BITS 8
 #define SUPERBLOCK_BITS 14
 
-#define CEILDIV(a, b) (a/b) + (a % b != 0)
+#define CEILDIV(a, b) ((a/b) + (a % b != 0))
 
 /*
  * Address is a representation of 64 bit addresses in 32 bits
@@ -93,6 +93,7 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 		__device__ void set_superblock();	//Chooses a superblock to be used by the warp
 		__device__ void set();		//Chooses a memory block from the current superblock as a resident block
 		
+		__device__ Address warp_allocate(int *);
 		__device__ Address warp_allocate();
 };
 
