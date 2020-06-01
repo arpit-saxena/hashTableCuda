@@ -98,6 +98,7 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 		__device__ void set_superblock();	//Chooses a superblock to be used by the warp
 		__device__ void set();		//Chooses a memory block from the current superblock as a resident block
 		
+		__device__ Address warp_allocate(int *);
 		__device__ Address warp_allocate();
 };
 
