@@ -2,6 +2,7 @@
 #include "HashFunction.cuh"
 #include <stdio.h>
 #include <assert.h>
+#include <new>
 
 BlockBitMap::BlockBitMap() {
 	memset(bitmap, 0, 32*sizeof(uint32_t));

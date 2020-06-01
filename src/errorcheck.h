@@ -23,4 +23,4 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define gpuErrchk(ans) ans;
 
 #endif /* DEBUG */
-#endif /* ERRORCHECK_H */ 
+#endif /* ERRORCHECK_H */

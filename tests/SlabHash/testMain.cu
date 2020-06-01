@@ -32,6 +32,7 @@ __global__ void kernel(SlabAlloc * s) {
 
 int main() {
 	const ULL numWarps = 1<<13, numSuperBlocks = numWarps >> 8;
+	printf("ASJD\n");
 	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
 	SlabAlloc * d_s;
 	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
