@@ -23,11 +23,12 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 		superBlocks[i] = nullptr;
 	}
 
+	SuperBlock * sb = new SuperBlock();
 	for (int i = 0; i < numSuperBlocks; i++) {
-		SuperBlock sb;
 		cudaMalloc(superBlocks + i, sizeof(SuperBlock));
-		cudaMemcpy(superBlocks[i], &sb , sizeof(SuperBlock), cudaMemcpyDefault);
+		cudaMemcpy(superBlocks[i], sb , sizeof(SuperBlock), cudaMemcpyDefault);
 	}
+	delete sb;
 }
 
 __host__ SlabAlloc::~SlabAlloc() {
@@ -161,6 +162,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 				if(memoryblock_changes > max_allowed_memoryblock_changes ) {
 					slab_alloc->status = 1;
 					__threadfence();
+					int khela = 0;
+					assert(khela);
 					asm("trap;"); // Kills kernel with error
 				}
 				set();
@@ -195,6 +198,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 	//Terminate
 	slab_alloc->status = 2;
 	__threadfence();
+	int mahakhela = 0;
+	assert(mahakhela);
 	asm("trap;");
 
 	return EMPTY_ADDRESS; // Will never execute

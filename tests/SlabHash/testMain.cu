@@ -37,7 +37,8 @@ int main() {
 	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
 	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
 	int numBlocks = numWarps>>5, threadsPerBlock = 1024;
-	kernel<<<numBlocks,threadsPerBlock>>>(d_s);
+	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<28));
+	kernel<<<2,32>>>(d_s);
 	gpuErrchk(cudaDeviceSynchronize());
 	gpuErrchk(cudaFree(d_s));
 	delete s;

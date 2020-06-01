@@ -4,6 +4,7 @@ project(hashTablesCuda LANGUAGES CXX CUDA)
 OPTION(USE_CUDA  "Build with GPU acceleration" ON)
 SET(CMAKE_CXX_STANDARD 11)
 SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+enable_language(CUDA)
 
 INCLUDE_DIRECTORIES(
 	src
@@ -15,8 +16,8 @@ FILE(GLOB_RECURSE SLABHASH_SOURCES
 	src/SlabHash/*.cu
 	src/SlabHash/*.cuh)
 	
-include(${CMAKE_BINARY_DIR}/build/conanbuildinfo.cmake)
-conan_basic_setup()
+#include(${CMAKE_BINARY_DIR}/build/conanbuildinfo.cmake)
+#conan_basic_setup()
 
 FILE(GLOB_RECURSE TEST_SOURCES
 	tests/SlabHash/*.cu

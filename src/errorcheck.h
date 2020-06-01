@@ -1,7 +1,7 @@
 #ifndef ERRORCHECK_H
 #define ERRORCHECK_H
 
-#ifdef DEBUG
+#ifndef NDEBUG
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +18,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
     }
 }
 
-#else /* DEBUG */
+#else /* NDEBUG */
 
 #define gpuErrchk(ans) ans;
 
