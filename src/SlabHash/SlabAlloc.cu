@@ -147,8 +147,10 @@ __device__ void ResidentBlock::set_superblock() {
 __device__ void ResidentBlock::set() {
 	if (resident_changes % max_resident_changes == 0 && resident_changes != 0) {
 		first_block = SlabAlloc::makeAddress(slab_alloc->allocateSuperBlock(), 0, 0);
+		#ifndef NDEBUG
 		if(threadIdx.x % warpSize == 0)		//DEBUG
 			printf(", allocateSuperBlock() called by set(), resident_changes=%d", resident_changes);
+		#endif // !NDEBUG
 		// resident_changes = -1;	// So it becomes 0 after a memory block is found
 	}
 	int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
@@ -163,6 +165,7 @@ __device__ void ResidentBlock::set() {
 	resident_bitmap_line = resident_bitmap->bitmap[laneID];
 }
 
+#ifndef NDEBUG
 __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 	int lrc[8] = { -1,-1,-1,-1,-1,-1,-1,-1 };
@@ -246,6 +249,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	}
 	return EMPTY_ADDRESS; // Will never execute
 }
+#endif // !NDEBUG
 
 __device__ Address ResidentBlock::warp_allocate() {
 	//TODO remove this loop maybe
