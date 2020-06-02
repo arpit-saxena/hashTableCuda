@@ -4,12 +4,12 @@
 typedef unsigned long long ULL;
 
 namespace {
-    // From https://stackoverflow.com/a/12996028/5585431
+	// From https://stackoverflow.com/a/12996028/5585431
 	__device__ ULL hash(ULL x) {
-	    x = ((x >> 16) ^ x) * 0x45d9f3b;
-	    x = ((x >> 16) ^ x) * 0x45d9f3b;
-	    x = (x >> 16) ^ x;
-	    return x;
+		x = ((x >> 16) ^ x) * 0x45d9f3b;
+		x = ((x >> 16) ^ x) * 0x45d9f3b;
+		x = (x >> 16) ^ x;
+		return x;
 	}
 }
 
