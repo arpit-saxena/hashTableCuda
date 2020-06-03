@@ -137,8 +137,11 @@ __device__ void ResidentBlock::set() {
 		// resident_changes = -1;	// So it becomes 0 after a memory block is found
 	}
 	int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
-	unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
-	starting_addr = first_block + (memory_block_no<<SLAB_BITS);
+	//unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
+	uint32_t total_memory_blocks = slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks;
+	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, total_memory_blocks);
+	starting_addr = super_memory_block_no << SLAB_BITS;
+	first_block = starting_addr & (1 << (SLAB_BITS + MEMORYBLOCK_BITS));
 	++resident_changes;
 	int laneID = threadIdx.x % warpSize;
 	BlockBitMap * resident_bitmap = slab_alloc->bitmaps + (starting_addr>>SLAB_BITS);
@@ -148,19 +151,19 @@ __device__ void ResidentBlock::set() {
 __device__ Address ResidentBlock::warp_allocate() {
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
+	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
 	const int max_allowed_superblock_changes = 2;
 	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
 	int allocator_thread_no = -1;
 	int memoryblock_changes = 0, laneID = threadIdx.x % warpSize;
-	for(int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
+	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
 		int slab_no;
-		while(true){		//Review this loop
-			uint32_t flipped_rbl = ~resident_bitmap_line;
-			slab_no = __ffs(flipped_rbl);
-			allocator_thread_no = __ffs(__ballot_sync(WARP_MASK, slab_no));
-			if(allocator_thread_no == 0){ // All memory units are full in the memory block
-				if(memoryblock_changes > max_allowed_memoryblock_changes ) {
+		while (true) {		//Review this loop
+			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
+			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
+			if (allocator_thread_no == -1) { // All memory units are full in the memory block
+				if (memoryblock_changes > max_allowed_memoryblock_changes) {
 					slab_alloc->status = 1;
 					__threadfence();
 					int khela = 0;
@@ -169,28 +172,27 @@ __device__ Address ResidentBlock::warp_allocate() {
 				}
 				set();
 				++memoryblock_changes;
-			} else {
-				--slab_no;
-				--allocator_thread_no;		//As it will be a number from 1 to 32, not 0 to 31
+			}
+			else {
 				break;
 			}
 		}
 
-		if(laneID == allocator_thread_no){
+		if (laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;
-			auto global_memory_block_no = starting_addr>>SLAB_BITS;
-			BlockBitMap * resident_bitmap = slab_alloc->bitmaps + global_memory_block_no;
-			uint32_t * global_bitmap_line = resident_bitmap->bitmap + laneID;
-			auto oldval = atomicOr(global_bitmap_line, i );
+			auto global_memory_block_no = starting_addr >> SLAB_BITS;
+			BlockBitMap* resident_bitmap = slab_alloc->bitmaps + global_memory_block_no;
+			uint32_t* global_bitmap_line = resident_bitmap->bitmap + laneID;
+			auto oldval = atomicOr(global_bitmap_line, i);
 			resident_bitmap_line = oldval | i;
-			if(oldval & i == 0){
-				allocated_address = starting_addr + (laneID<<5) + slab_no;
+			if ((oldval & i) == 0) {
+				allocated_address = starting_addr + (laneID << 5) + slab_no;
 			}
 		}
 
 		__syncwarp();
 		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
-		if(toreturn != EMPTY_ADDRESS) {
+		if (toreturn != EMPTY_ADDRESS) {
 			return toreturn;
 		}
 		// TODO check for divergence on this functions return
