@@ -10,7 +10,7 @@
 #define MEMORYBLOCK_BITS 8
 #define SUPERBLOCK_BITS 14
 
-#define CEILDIV(a, b) (a/b) + (a % b != 0)
+#define CEILDIV(a, b) ((a/b) + (a % b != 0))
 
 /*
  * Address is a representation of 64 bit addresses in 32 bits
