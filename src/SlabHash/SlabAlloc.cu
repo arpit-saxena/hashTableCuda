@@ -20,30 +20,41 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 		return;
 	}
 
-	for(int i = 0; i < maxSuperBlocks; ++i) {
-		superBlocks[i] = nullptr;
-	}
+	cudaMalloc(&superBlocks, maxSuperBlocks*sizeof(SuperBlock *));
 
 	SuperBlock * sb = new SuperBlock();
-	for (int i = 0; i < numSuperBlocks; i++) {
-		cudaMalloc(superBlocks + i, sizeof(SuperBlock));
-		cudaMemcpy(superBlocks[i], sb , sizeof(SuperBlock), cudaMemcpyDefault);
+	for (int i = 0; i < maxSuperBlocks; i++) {
+		SuperBlock * temp = nullptr;
+		if(i < numSuperBlocks) {
+			cudaMalloc(&temp, sizeof(SuperBlock));
+			cudaMemcpy(temp, sb , sizeof(SuperBlock), cudaMemcpyDefault);
+		}
+		cudaMemcpy(superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault);
 	}
 	delete sb;
 }
 
 __host__ SlabAlloc::~SlabAlloc() {
+	int size = maxSuperBlocks - initNumSuperBlocks;
+	int threadsPerBlock = 64, numBlocks = CEILDIV(size, threadsPerBlock);
+	utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(superBlocks + initNumSuperBlocks, size);
+
+	SuperBlock **  h_superBlocks = new SuperBlock *[initNumSuperBlocks];
+	cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault);
 	for (int i = 0; i < initNumSuperBlocks; i++) {
-		if(superBlocks[i])	cudaFree(superBlocks[i]);
-		superBlocks[i] = nullptr;
+		if(h_superBlocks[i])	cudaFree(h_superBlocks[i]);
 	}
+	delete h_superBlocks;
+	cudaFree(superBlocks);
 }
 
-__device__
-void SlabAlloc::cleanup() {
-	for (int i = initNumSuperBlocks; i < numSuperBlocks; i++) {
-		if(superBlocks[i])	free(superBlocks[i]);
-		superBlocks[i] = nullptr;
+__global__
+void utilitykernel::clean_superblocks(SuperBlock ** superBlocks, const ULL size) {
+	int threadID = blockDim.x * blockIdx.x + threadIdx.x;
+	while(threadID < size) {
+		if(superBlocks[threadID])	free(superBlocks[threadID]);
+		superBlocks[threadID] = nullptr;
+		threadID += gridDim.x * blockDim.x;
 	}
 }
 

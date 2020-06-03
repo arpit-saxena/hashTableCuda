@@ -46,6 +46,12 @@ struct SuperBlock {
 	MemoryBlock memoryBlocks[numMemoryBlocks];
 };
 
+namespace utilitykernel {
+	// Frees up the additional superblocks malloc'ed by allocateSuperBlock() in SlabAlloc
+	// Called in SlabAlloc::~SlabAlloc()
+	__global__ void clean_superblocks(SuperBlock **, const ULL);
+}
+
 // NOTE: Construct the object on host and copy it to the device afterwards to be able
 // to run functions. Also, make sure the argument 'numSuperBlocks' passed to the ctor
 // must be equal to the total no. of warps in the kernel that will be using this
@@ -63,14 +69,13 @@ class SlabAlloc {		//A single object of this will reside in global memory
 	private:
 		int numSuperBlocks;
 		const int initNumSuperBlocks;
-		SuperBlock * superBlocks[maxSuperBlocks];
+		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
 
 		__device__ void wipeSlab(Address);		// Wipes the contents of a Slab(sets all its bits to 1)
 
 	public:
 		__host__ SlabAlloc(int numSuperBlocks);
 		__host__ ~SlabAlloc();
-		__device__ void cleanup();	// Frees up the additional superblocks malloc'ed by allocateSuperBlock()
 		BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
 		__device__ int allocateSuperBlock();	// Returns new super block's index
 		__device__ __host__ int getNumSuperBlocks();
