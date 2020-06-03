@@ -36,8 +36,10 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 
 __host__ SlabAlloc::~SlabAlloc() {
 	int size = maxSuperBlocks - initNumSuperBlocks;
-	int threadsPerBlock = 64, numBlocks = CEILDIV(size, threadsPerBlock);
-	utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(superBlocks + initNumSuperBlocks, size);
+	if (size != 0) {
+		int threadsPerBlock = 64, numBlocks = CEILDIV(size, threadsPerBlock);
+		utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(superBlocks + initNumSuperBlocks, size);
+	}
 
 	SuperBlock **  h_superBlocks = new SuperBlock *[initNumSuperBlocks];
 	cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault);
