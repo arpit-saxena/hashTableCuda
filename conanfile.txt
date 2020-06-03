@@ -1,9 +1,0 @@
-[requires]
-gtest/1.10.0
-
-[generators]
-cmake
-
-[imports]
-lib, *.dylib* -> ./build/bin
-lib, *.a -> ./build/bin
