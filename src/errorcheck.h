@@ -11,11 +11,11 @@
 __host__
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
-    if (code != cudaSuccess) 
-    {
-        printf("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-        if (abort) exit(code);
-    }
+	if (code != cudaSuccess) 
+	{
+		printf("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+		if (abort) exit(code);
+	}
 }
 
 #else /* NDEBUG */
