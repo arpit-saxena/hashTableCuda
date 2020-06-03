@@ -8,15 +8,15 @@ __host__ HashTable::HashTable(int size, SlabAlloc * s) {
 	slab_alloc = s;
 	cudaMalloc(&base_slabs, no_of_buckets*sizeof(Address));
 	int threads_per_block = 32 /* warp size */ , blocks = no_of_buckets;
-	hashtbl::init_table<<<blocks, threads_per_block>>>(no_of_buckets, slab_alloc, base_slabs);
+	utilitykernel::init_table<<<blocks, threads_per_block>>>(no_of_buckets, slab_alloc, base_slabs);
 }
 
-__global__ void hashtbl::init_table(int no_of_buckets, SlabAlloc * slab_alloc, Address * base_slabs) {
+__global__ void utilitykernel::init_table(int no_of_buckets, SlabAlloc * slab_alloc, Address * base_slabs) {
 	ResidentBlock rb(slab_alloc);
-	int i = blockIdx.x;
-	while (i < no_of_buckets) {
-		base_slabs[i] = rb.warp_allocate();
-		i += gridDim.x;
+	int warp_id = blockIdx.x;
+	while (warp_id < no_of_buckets) {
+		base_slabs[warp_id] = rb.warp_allocate();
+		warp_id += gridDim.x;
 	}
 }
 

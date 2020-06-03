@@ -12,7 +12,7 @@
 
 typedef unsigned long long ULL;
 
-namespace hashtbl {
+namespace utilitykernel {
 	__global__ void init_table(int, SlabAlloc *, Address *);
 }
 

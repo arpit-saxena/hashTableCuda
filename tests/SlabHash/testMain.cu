@@ -66,9 +66,6 @@ __global__ void kernel(SlabAlloc * s) {
 	*ptr = laneID() + 32;
 	
 	readanddeallocate(s, &rb, a);
-
-
-	s->cleanup();
 }
 
 int main() {
