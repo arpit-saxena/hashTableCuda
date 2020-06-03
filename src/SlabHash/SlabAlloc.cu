@@ -167,7 +167,6 @@ __device__ void ResidentBlock::set() {
 
 #ifndef NDEBUG
 __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
-	int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 	int lrc[8] = { -1,-1,-1,-1,-1,-1,-1,-1 };
 	int sn[8];
 	int atn[8];
@@ -182,6 +181,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	int memoryblock_changes = 0, laneID = threadIdx.x % warpSize;
 	for(/*int local_rbl_changes = 0*/*x = 0; /*local_rbl_changes*/*x <= max_local_rbl_changes; ++(*x) /*++local_rbl_changes*/) {		//review the loop termination condition
 		int slab_no;
+		auto local_rbl_changes = *x;
 		while (true) {		//Review this loop
 			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
 			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
@@ -254,6 +254,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 __device__ Address ResidentBlock::warp_allocate() {
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
+	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 	const int max_allowed_superblock_changes = 2;
 	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
@@ -262,10 +263,9 @@ __device__ Address ResidentBlock::warp_allocate() {
 	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
 		int slab_no;
 		while (true) {		//Review this loop
-			uint32_t flipped_rbl = ~resident_bitmap_line;
-			slab_no = __ffs(flipped_rbl);
-			allocator_thread_no = __ffs(__ballot_sync(WARP_MASK, slab_no));
-			if (allocator_thread_no == 0) { // All memory units are full in the memory block
+			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
+			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
+			if (allocator_thread_no == -1) { // All memory units are full in the memory block
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
 					slab_alloc->status = 1;
 					__threadfence();
@@ -277,8 +277,6 @@ __device__ Address ResidentBlock::warp_allocate() {
 				++memoryblock_changes;
 			}
 			else {
-				--slab_no;
-				--allocator_thread_no;		//As it will be a number from 1 to 32, not 0 to 31
 				break;
 			}
 		}
