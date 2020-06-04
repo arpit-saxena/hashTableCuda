@@ -30,7 +30,7 @@ __global__ void checkallbitmaps(SlabAlloc* s) {
 	while (i < s->maxSuperBlocks * SuperBlock::numMemoryBlocks) {
 		uint32_t Bitmap = s->bitmaps[i / 32].bitmap[i % 32];
 		if (Bitmap != 0) {
-			printf("s->bitmaps[%d].bitmap[%d] = %x\n", i / 32, i % 32, Bitmap);
+			printf("s->bitmaps[%d].bitmap[%d] = %x, instead of 0\n", i / 32, i % 32, Bitmap);
 		}
 		i += gridDim.x;
 	}
@@ -72,7 +72,9 @@ __global__ void kernel(SlabAlloc * s) {
 }
 
 int main() {
-	const ULL numWarps = 1<<13, numSuperBlocks = numWarps >> 8;
+	const ULL log2slabsPerWarp = 0;	// Cannot be greater than SLAB_BITS(10) + MEMORYBLOCK_BITS(8)
+	// Make sure numWarps is big enough so that numSuperBlocks is non-zero
+	const ULL numWarps = 1 << 18, numSuperBlocks = numWarps >> SLAB_BITS + MEMORYBLOCK_BITS - log2slabsPerWarp;
 	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
 	SlabAlloc * d_s;
 	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));

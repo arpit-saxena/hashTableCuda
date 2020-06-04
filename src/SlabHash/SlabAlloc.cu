@@ -292,10 +292,10 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	asm("trap;");*/
 	__syncwarp();
 	if (laneID == allocator_thread_no) {
-		printf("Warp ID=%d, local_rbl_changes=%d\n", global_warp_id, *x);
+		printf("warp_allocate() failed for Warp ID=%d. Details of each iteration:\n", global_warp_id);
 		for (int i = 0; i < 8; ++i) {
 			if (lrc[i] != -1)
-				printf("local_rbl_changes=%d, oldval=%x, slab_no=%d, allocator_thread_no=%d\n", lrc[i], ov[i], sn[i], atn[i]);
+				printf("-> Warp ID=%d, local_rbl_changes=%d, oldval=%x, slab_no=%d, allocator_thread_no=%d\n", global_warp_id, lrc[i], ov[i], sn[i], atn[i]);
 		}
 		printf("-------------------------------------------------------------------------------------------------------\n");
 	}
