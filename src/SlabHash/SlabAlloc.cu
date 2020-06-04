@@ -132,15 +132,7 @@ __device__ void SlabAlloc::wipeSlab(Address addr) {			//Doesn't need a full warp
 __device__ ResidentBlock::ResidentBlock(SlabAlloc * s) {
 	slab_alloc = s;
 	resident_changes = -1;
-	set_superblock();
 	set();
-}
-
-__device__ void ResidentBlock::set_superblock() {
-	// The line below assume blockDim is divisible by warpSize i.e. 32
-	int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
-	uint32_t superblock_no = global_warp_id/SuperBlock::numMemoryBlocks;	// This is the hashfunction used to assign the superblock
-	first_block = SlabAlloc::makeAddress(superblock_no, 0, 0);
 }
 
 // Needs full warp
