@@ -165,6 +165,66 @@ __device__ void ResidentBlock::set() {
 	resident_bitmap_line = resident_bitmap->bitmap[laneID];
 }
 
+__device__ Address ResidentBlock::warp_allocate() {
+	//TODO remove this loop maybe
+	Address allocated_address = EMPTY_ADDRESS;
+	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
+	const int max_allowed_superblock_changes = 2;
+	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
+	const int max_local_rbl_changes = max_resident_changes;
+	int allocator_thread_no = -1;
+	int memoryblock_changes = 0, laneID = threadIdx.x % warpSize;
+	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
+		int slab_no;
+		while (true) {		//Review this loop
+			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
+			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
+			if (allocator_thread_no == -1) { // All memory units are full in the memory block
+				if (memoryblock_changes > max_allowed_memoryblock_changes) {
+					slab_alloc->status = 1;
+					__threadfence();
+					int khela = 0;
+					assert(khela);
+					asm("trap;"); // Kills kernel with error
+				}
+				set();
+				++memoryblock_changes;
+			}
+			else {
+				break;
+			}
+		}
+
+		if (laneID == allocator_thread_no) {
+			uint32_t i = 1 << slab_no;
+			auto global_memory_block_no = starting_addr >> SLAB_BITS;
+			BlockBitMap* resident_bitmap = slab_alloc->bitmaps + global_memory_block_no;
+			uint32_t* global_bitmap_line = resident_bitmap->bitmap + laneID;
+			auto oldval = atomicOr(global_bitmap_line, i);
+			resident_bitmap_line = oldval | i;
+			if ((oldval & i) == 0) {
+				allocated_address = starting_addr + (laneID << 5) + slab_no;
+			}
+		}
+
+		__syncwarp();
+		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
+		if (toreturn != EMPTY_ADDRESS) {
+			return toreturn;
+		}
+		// TODO check for divergence on this functions return
+	}
+	//This means all max_local_rbl_changes attempts to allocate memory failed as the atomicCAS call kept failing
+	//Terminate
+	slab_alloc->status = 2;
+	__threadfence();
+	int mahakhela = 0;
+	assert(mahakhela);
+	asm("trap;");
+
+	return EMPTY_ADDRESS; // Will never execute
+}
+
 #ifndef NDEBUG
 __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	int lrc[8] = { -1,-1,-1,-1,-1,-1,-1,-1 };
@@ -250,63 +310,3 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	return EMPTY_ADDRESS; // Will never execute
 }
 #endif // !NDEBUG
-
-__device__ Address ResidentBlock::warp_allocate() {
-	//TODO remove this loop maybe
-	Address allocated_address = EMPTY_ADDRESS;
-	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
-	const int max_allowed_superblock_changes = 2;
-	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
-	const int max_local_rbl_changes = max_resident_changes;
-	int allocator_thread_no = -1;
-	int memoryblock_changes = 0, laneID = threadIdx.x % warpSize;
-	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
-		int slab_no;
-		while (true) {		//Review this loop
-			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
-			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
-			if (allocator_thread_no == -1) { // All memory units are full in the memory block
-				if (memoryblock_changes > max_allowed_memoryblock_changes) {
-					slab_alloc->status = 1;
-					__threadfence();
-					int khela = 0;
-					assert(khela);
-					asm("trap;"); // Kills kernel with error
-				}
-				set();
-				++memoryblock_changes;
-			}
-			else {
-				break;
-			}
-		}
-
-		if (laneID == allocator_thread_no) {
-			uint32_t i = 1 << slab_no;
-			auto global_memory_block_no = starting_addr >> SLAB_BITS;
-			BlockBitMap* resident_bitmap = slab_alloc->bitmaps + global_memory_block_no;
-			uint32_t* global_bitmap_line = resident_bitmap->bitmap + laneID;
-			auto oldval = atomicOr(global_bitmap_line, i);
-			resident_bitmap_line = oldval | i;
-			if ((oldval & i) == 0) {
-				allocated_address = starting_addr + (laneID << 5) + slab_no;
-			}
-		}
-
-		__syncwarp();
-		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
-		if (toreturn != EMPTY_ADDRESS) {
-			return toreturn;
-		}
-		// TODO check for divergence on this functions return
-	}
-	//This means all max_local_rbl_changes attempts to allocate memory failed as the atomicCAS call kept failing
-	//Terminate
-	slab_alloc->status = 2;
-	__threadfence();
-	int mahakhela = 0;
-	assert(mahakhela);
-	asm("trap;");
-
-	return EMPTY_ADDRESS; // Will never execute
-}
