@@ -1,3 +1,5 @@
+test_slab
+
 *.i
 *.ii
 *.gpu
@@ -29,3 +31,6 @@ _deps
 # Visual Studio crap
 /.vs/
 /out/
+
+# Eclipse crap
+/.settings/
