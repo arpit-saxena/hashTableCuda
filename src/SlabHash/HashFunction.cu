@@ -27,7 +27,7 @@ uint32_t HashFunction::hash(uint32_t value, uint32_t wrap) {
 
 __device__
 int HashFunction::unsetbit_index(uint32_t global_warp_id, uint32_t resident_changes, uint32_t value){
-	uint32_t flipped_value = ~value;
+	uint32_t flipped_value = __brev(~value);
 	int num_unset = __popc(flipped_value);
 	if (num_unset == 0) return -1;
 	int bit_number = memoryblock_hash(global_warp_id, resident_changes, num_unset);
@@ -42,6 +42,6 @@ int HashFunction::unsetbit_index(uint32_t global_warp_id, uint32_t resident_chan
 		bit_number--;
 	}
 	//Test
-	assert ((~value >> (32 - index - 1)) & 1);
+	assert ((~value >> index) & 1);
 	return index;
 }
