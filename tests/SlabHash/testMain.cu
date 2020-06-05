@@ -68,7 +68,7 @@ __global__ void kernel(SlabAlloc * s) {
 	readanddeallocate(s, &rb, a);
 }
 
-int main() {
+void test1() {
 	const ULL log2slabsPerWarp = 0;	// Cannot be greater than SLAB_BITS(10) + MEMORYBLOCK_BITS(8)
 	// Make sure numWarps is big enough so that numSuperBlocks is non-zero
 	const ULL numWarps = 1 << 18, numSuperBlocks = numWarps >> SLAB_BITS + MEMORYBLOCK_BITS - log2slabsPerWarp;
@@ -96,5 +96,34 @@ int main() {
 	printf("Average local_rbl_changes = %f\n", avg_local_rbl_changes);
 	gpuErrchk(cudaFree(d_s));
 	delete s;
+}
+
+
+__global__ void kernel2(SlabAlloc * s) {
+	ResidentBlock rb(s);
+	int x = 0;
+	for(int i = 0; i <= MemoryBlock::numSlabs; ++i) {
+		if(threadIdx.x == 0)	printf("\r%.4d", i);
+		rb.warp_allocate(&x);
+	}
+	s->allocateSuperBlock();
+}
+
+void test2() {
+	const ULL numWarps = 1, numSuperBlocks = 1;
+	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
+	SlabAlloc * d_s;
+	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
+	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
+	int numBlocks = numWarps, threadsPerBlock = 32;
+	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<28));
+
+	kernel2<<<numBlocks,threadsPerBlock>>>(d_s);
+
+	gpuErrchk(cudaFree(d_s));
+}
+
+int main() {
+	test1();
 	gpuErrchk(cudaDeviceReset());
 }
