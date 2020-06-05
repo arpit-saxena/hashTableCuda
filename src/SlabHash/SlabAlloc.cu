@@ -141,7 +141,7 @@ __device__ void ResidentBlock::set() {
 		slab_alloc->allocateSuperBlock();
 		#ifndef NDEBUG
 		if(threadIdx.x % warpSize == 0)		//DEBUG
-			printf(", allocateSuperBlock() called by set(), resident_changes=%d", resident_changes);
+			printf("\tset()->allocateSuperBlock() called by set(), resident_changes=%d\n", resident_changes);
 		#endif // !NDEBUG
 		// resident_changes = -1;	// So it becomes 0 after a memory block is found
 	}
@@ -149,6 +149,11 @@ __device__ void ResidentBlock::set() {
 	//unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
 	uint32_t total_memory_blocks = slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks;
 	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, total_memory_blocks);
+#ifndef NDEBUG
+	if (threadIdx.x % warpSize == 0 && resident_changes != -1)		//DEBUG
+		printf("\tset()->super_memory_block_no=hash(global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", global_warp_id, resident_changes, total_memory_blocks, super_memory_block_no);
+#endif // !NDEBUG
+
 	starting_addr = super_memory_block_no << SLAB_BITS;
 	++resident_changes;
 	int laneID = threadIdx.x % warpSize;
@@ -250,10 +255,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 				}
 				__syncwarp();
 				if (laneID == 0)
-					printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()", global_warp_id, *x, memoryblock_changes);
+					printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", global_warp_id, *x, memoryblock_changes);
 				set();
-				if (laneID == 0)
-					printf("\n");
 				++memoryblock_changes;
 			}
 			else {
