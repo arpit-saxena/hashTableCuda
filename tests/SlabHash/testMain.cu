@@ -18,7 +18,7 @@ __device__ void readanddeallocate(SlabAlloc * s, ResidentBlock * rb, Address a) 
 	uint32_t data2 = *(s->SlabAddress(address, laneID()));
 	s->deallocate(a);
 	s->deallocate(address);
-	if(laneID() != 31 && (data1 != laneID() || data2 != laneID() + 32))
+	if(laneID() != 31 && (data1 != warpID() || data2 != warpID() + (1 << 18)))// + 32))
 		printf("After writing, Warp %d, Lane %d: Slab 1 - %d, Slab 2 - %d\n", warpID(), laneID(), data1, data2);
 }
 
@@ -58,12 +58,12 @@ __global__ void kernel(SlabAlloc * s) {
 		printf("Before writing, Warp %d, Lane %d: Slab 1 - %x, Slab 2 - %x\n", warpID(), laneID(), data1, data2);
 
 	auto ptr = s->SlabAddress(a, laneID());
-	*ptr = laneID();
+	*ptr = warpID();
 	if(laneID() == ADDRESS_LANE) {
 		*ptr = a2;
 	}
 	ptr = s->SlabAddress(a2, laneID());
-	*ptr = laneID() + 32;
+	*ptr = warpID()+(1<<18);// + 32;
 	
 	readanddeallocate(s, &rb, a);
 }
