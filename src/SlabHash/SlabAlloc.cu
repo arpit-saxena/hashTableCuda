@@ -218,10 +218,14 @@ __device__ Address ResidentBlock::warp_allocate() {
 
 #ifndef NDEBUG
 __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
-	int lrc[8] = { -1,-1,-1,-1,-1,-1,-1,-1 };
-	int sn[8];
-	int atn[8];
-	uint32_t ov[8];
+	__shared__ int lrc[32][8];
+	__shared__ int sn[32][8];
+	__shared__ int atn[32][8];
+	__shared__ uint32_t ov[32][8];
+	__syncwarp();
+	int warp_id_in_block = threadIdx.x / warpSize;
+	for (int i = 0; i < 8; ++i)
+		lrc[warp_id_in_block][i] = -1;
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
 	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
@@ -268,10 +272,10 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 				allocated_address = starting_addr + (laneID << 5) + slab_no;
 			}
 			else {
-				lrc[*x] = *x;
-				sn[*x] = slab_no;
-				atn[*x] = allocator_thread_no;
-				ov[*x] = oldval;
+				lrc[warp_id_in_block][*x] = *x;
+				sn[warp_id_in_block][*x] = slab_no;
+				atn[warp_id_in_block][*x] = allocator_thread_no;
+				ov[warp_id_in_block][*x] = oldval;
 			}
 		}
 
@@ -293,8 +297,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	if (laneID == allocator_thread_no) {
 		printf("warp_allocate() failed for Warp ID=%d. Details of each iteration:\n", global_warp_id);
 		for (int i = 0; i < 8; ++i) {
-			if (lrc[i] != -1)
-				printf("-> Warp ID=%d, local_rbl_changes=%d, oldval=%x, slab_no=%d, allocator_thread_no=%d\n", global_warp_id, lrc[i], ov[i], sn[i], atn[i]);
+			if (lrc[warp_id_in_block][i] != -1)
+				printf("-> Warp ID=%d, local_rbl_changes=%d, oldval=%x, slab_no=%d, allocator_thread_no=%d\n", global_warp_id, lrc[warp_id_in_block][i], ov[warp_id_in_block][i], sn[warp_id_in_block][i], atn[warp_id_in_block][i]);
 		}
 		printf("-------------------------------------------------------------------------------------------------------\n");
 	}
