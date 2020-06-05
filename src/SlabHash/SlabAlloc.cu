@@ -138,7 +138,7 @@ __device__ ResidentBlock::ResidentBlock(SlabAlloc * s) {
 // Needs full warp
 __device__ void ResidentBlock::set() {
 	if (resident_changes % max_resident_changes == 0 && resident_changes != 0) {
-		first_block = SlabAlloc::makeAddress(slab_alloc->allocateSuperBlock(), 0, 0);
+		slab_alloc->allocateSuperBlock();
 		#ifndef NDEBUG
 		if(threadIdx.x % warpSize == 0)		//DEBUG
 			printf(", allocateSuperBlock() called by set(), resident_changes=%d", resident_changes);
@@ -150,7 +150,6 @@ __device__ void ResidentBlock::set() {
 	uint32_t total_memory_blocks = slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks;
 	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, total_memory_blocks);
 	starting_addr = super_memory_block_no << SLAB_BITS;
-	first_block = starting_addr & (1 << (SLAB_BITS + MEMORYBLOCK_BITS));
 	++resident_changes;
 	int laneID = threadIdx.x % warpSize;
 	BlockBitMap * resident_bitmap = slab_alloc->bitmaps + (starting_addr>>SLAB_BITS);

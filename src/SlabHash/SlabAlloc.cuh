@@ -86,8 +86,7 @@ class SlabAlloc {		//A single object of this will reside in global memory
 class ResidentBlock {			//Objects of this will be on thread-local memory
 		SlabAlloc * slab_alloc;
 		Address starting_addr;		//address of the 1st memory unit of the resident block
-		Address first_block;		//address of the 1st memory unit of the 1st memory block
-									//of the superblock being used by the warp
+
 		uint32_t resident_bitmap_line;		//local copy of the 32-bit line of the bitmap of the resident block belonging to the lane
 		int resident_changes;
 
