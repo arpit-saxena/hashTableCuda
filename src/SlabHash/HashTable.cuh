@@ -5,7 +5,7 @@
 #include "SlabAlloc.cuh"
 
 #define ADDRESS_LANE 31
-#define EMPTY_KEY (uint32_t)((1llu << 32) - 1)
+#define EMPTY_KEY (uint32_t)(0xFFFFFFFF)
 #define EMPTY_VALUE EMPTY_KEY
 #define SEARCH_NOT_FOUND EMPTY_KEY
 #define VALID_KEY_MASK (uint32_t)(0xAAAAAAA8)

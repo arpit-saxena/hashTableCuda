@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-#define WARP_MASK (uint32_t)((1llu << 32) - 1)
+#define WARP_MASK (uint32_t)(0xFFFFFFFF)
 #define EMPTY_ADDRESS (Address)WARP_MASK
 
 #define SLAB_BITS 10
