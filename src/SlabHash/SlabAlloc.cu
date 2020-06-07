@@ -84,6 +84,14 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 		} else {
 			localIdx = numSuper++;
 			SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
+			if (newSuperBlock == nullptr) {
+				/*this->status = 3;
+				int OutOfMemory = 0;
+				printf("Finally, %d superblocks\n", numSuperBlocks);
+				assert(OutOfMemory);
+				asm("trap;");*/
+				return localIdx - 1;
+			}
 			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (superBlocks + localIdx), (ULL) nullptr, (ULL) newSuperBlock);
 			if (oldSuperBlock != nullptr) {
 				free(newSuperBlock);
