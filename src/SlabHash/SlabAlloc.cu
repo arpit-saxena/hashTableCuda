@@ -8,10 +8,6 @@ BlockBitMap::BlockBitMap() {
 	memset(bitmap, 0, 32*sizeof(uint32_t));
 }
 
-__host__ __device__ Slab::Slab() {
-	memset(arr, 0xFF, 32*sizeof(uint32_t));
-}
-
 __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSuperBlocks(numSuperBlocks) {
 	this -> numSuperBlocks = numSuperBlocks;
 	if (numSuperBlocks > maxSuperBlocks) {
@@ -22,16 +18,13 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 
 	cudaMalloc(&superBlocks, maxSuperBlocks*sizeof(SuperBlock *));
 
-	SuperBlock * sb = new SuperBlock();
 	for (int i = 0; i < maxSuperBlocks; i++) {
 		SuperBlock * temp = nullptr;
 		if(i < numSuperBlocks) {
 			cudaMalloc(&temp, sizeof(SuperBlock));
-			cudaMemcpy(temp, sb , sizeof(SuperBlock), cudaMemcpyDefault);
 		}
 		cudaMemcpy(superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault);
 	}
-	delete sb;
 }
 
 __host__ SlabAlloc::~SlabAlloc() {
@@ -97,7 +90,6 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 				free(newSuperBlock);
 			} else {
 				atomicAdd(&numSuperBlocks, 1);
-				new(newSuperBlock) SuperBlock();
 			}
 		}
 	}
@@ -119,22 +111,11 @@ __device__ void SlabAlloc::deallocate(Address addr){		//Doesn't need a full warp
 	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	int laneID = threadIdx.x % warpSize;
 	if(laneID == __ffs(__activemask()) - 1){
-		wipeSlab(addr);
 		BlockBitMap * resident_bitmap = bitmaps + global_memory_block_no;
 		uint32_t * global_bitmap_line = resident_bitmap->bitmap + lane_no;
 		atomicAnd(global_bitmap_line, ~(1u << slab_no));
 	}
 	// TODO Check for divergence here
-}
-
-__device__ void SlabAlloc::wipeSlab(Address addr) {			//Doesn't need a full warp
-	uint32_t slab_idx = addr & ((1 << SLAB_BITS) - 1);
-	uint32_t block_idx = (addr >> SLAB_BITS) & ((1 << MEMORYBLOCK_BITS) - 1);
-	uint32_t superBlock_idx = (addr >> (SLAB_BITS + MEMORYBLOCK_BITS));
-	auto slabarr = superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr;
-	if (threadIdx.x % warpSize == __ffs(__activemask()) - 1) {
-		memset(slabarr, 0xFF, 32 * sizeof(uint32_t));
-	}
 }
 
 __device__ ResidentBlock::ResidentBlock(SlabAlloc * s) {
@@ -158,8 +139,8 @@ __device__ void ResidentBlock::set() {
 	uint32_t total_memory_blocks = slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks;
 	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, total_memory_blocks);
 #ifndef NDEBUG
-	if (threadIdx.x % warpSize == 0 && resident_changes != -1)		//DEBUG
-		printf("\tset()->super_memory_block_no=hash(global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", global_warp_id, resident_changes, total_memory_blocks, super_memory_block_no);
+	//if (threadIdx.x % warpSize == 0 && resident_changes != -1)		//DEBUG
+//		printf("\tset()->super_memory_block_no=hash(global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", global_warp_id, resident_changes, total_memory_blocks, super_memory_block_no);
 #endif // !NDEBUG
 
 	starting_addr = super_memory_block_no << SLAB_BITS;
@@ -173,11 +154,12 @@ __device__ Address ResidentBlock::warp_allocate() {
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
 	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
+	const int laneID = threadIdx.x % warpSize;
 	const int max_allowed_superblock_changes = 2;
 	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
 	int allocator_thread_no = -1;
-	int memoryblock_changes = 0, laneID = threadIdx.x % warpSize;
+	int memoryblock_changes = 0;
 	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
 		int slab_no;
 		while (true) {		//Review this loop
@@ -214,6 +196,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 		__syncwarp();
 		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
 		if (toreturn != EMPTY_ADDRESS) {
+			*(slab_alloc->SlabAddress(toreturn, laneID)) = EMPTY_ADDRESS;
 			return toreturn;
 		}
 		// TODO check for divergence on this functions return
@@ -242,11 +225,12 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
 	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
+	const int laneID = threadIdx.x % warpSize;
 	const int max_allowed_superblock_changes = 2;
 	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
 	int allocator_thread_no = -1;
-	int memoryblock_changes = 0, laneID = threadIdx.x % warpSize;
+	int memoryblock_changes = 0;
 	for(/*int local_rbl_changes = 0*/*x = 0; /*local_rbl_changes*/*x <= max_local_rbl_changes; ++(*x) /*++local_rbl_changes*/) {		//review the loop termination condition
 		int slab_no;
 		auto local_rbl_changes = *x;
@@ -262,8 +246,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 					asm("trap;"); // Kills kernel with error
 				}
 				__syncwarp();
-				if (laneID == 0)
-					printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", global_warp_id, *x, memoryblock_changes);
+				//if (laneID == 0)
+					//printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", global_warp_id, *x, memoryblock_changes);
 				set();
 				++memoryblock_changes;
 			}
@@ -293,6 +277,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 		__syncwarp();
 		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
 		if (toreturn != EMPTY_ADDRESS) {
+			//uint32_t* ptr = slab_alloc->SlabAddress(toreturn, laneID);
+			*(slab_alloc->SlabAddress(toreturn, laneID)) = EMPTY_ADDRESS;
 			return toreturn;
 		}
 		// TODO check for divergence on this functions return

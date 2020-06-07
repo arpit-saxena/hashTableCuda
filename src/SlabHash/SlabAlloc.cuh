@@ -33,7 +33,6 @@ struct BlockBitMap {
 
 struct Slab {
 	uint32_t arr[32];
-	__host__ __device__ Slab();
 };
 
 struct MemoryBlock {
@@ -70,8 +69,6 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		int numSuperBlocks;
 		const int initNumSuperBlocks;
 		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
-
-		__device__ void wipeSlab(Address);		// Wipes the contents of a Slab(sets all its bits to 1)
 
 	public:
 		__host__ SlabAlloc(int numSuperBlocks);
