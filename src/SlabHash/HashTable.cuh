@@ -8,7 +8,7 @@
 #define EMPTY_KEY (uint32_t)(0xFFFFFFFF)
 #define EMPTY_VALUE EMPTY_KEY
 #define SEARCH_NOT_FOUND EMPTY_KEY
-#define VALID_KEY_MASK (uint32_t)(0xAAAAAAA8)
+#define VALID_KEY_MASK (uint32_t)(0x15555555)
 
 typedef unsigned long long ULL;
 
@@ -36,7 +36,10 @@ struct Instruction {
 	
 	Type type;
 	uint32_t key, value;
+
+	// Results from finder()
 	uint32_t * foundvalues = nullptr;		//Will be set to point to an array in global memory by finder
+	int findererror = 0;	//Will be set to 1 if foundvalues couldn't be malloc'ed due to insufficient heap memory
 
 	__device__ ~Instruction();
 };

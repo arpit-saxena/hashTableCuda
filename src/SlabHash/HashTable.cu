@@ -152,7 +152,9 @@ __device__ void HashTableOperation::deleter() {
 	else {
 		auto next_ptr = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		if(next_ptr == EMPTY_ADDRESS) {
-			is_active = false;
+			if(laneID == src_lane) {
+				is_active = false;
+			}
 		}
 		else {
 			next = next_ptr;
@@ -170,9 +172,9 @@ __device__ void HashTableOperation::finder() {
 		read_data = ReadSlab(next, laneID);
 		uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == src_key);
 		no_of_found_values += __popc(found_key_lanes);
-		uint32_t found_value_lanes = found_key_lanes >> 1;
-		uint32_t mask = (WARP_MASK) << (31-laneID);
-		uint32_t to_write = (1llu << 32) - 1;
+		uint32_t found_value_lanes = found_key_lanes << 1;
+		uint32_t mask = (WARP_MASK) >> (31-laneID);
+		uint32_t to_write = 0xFFFFFFFF;
 		next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		if(next != EMPTY_ADDRESS) {
 			uint32_t nextslab = resident_block->warp_allocate();
@@ -183,10 +185,10 @@ __device__ void HashTableOperation::finder() {
 		else if(laneID == ADDRESS_LANE - 1) {
 			to_write = __popc(found_key_lanes);
 		}
-		else if(found_key_lanes & 1 << (31-laneID) ) {
+		else if(found_key_lanes & 1 << laneID ) {
 			to_write = __popc(found_value_lanes & mask);
 		}
-		else if(found_value_lanes & 1 << (31-laneID)) {
+		else if(found_value_lanes & 1 << laneID) {
 			to_write = read_data;
 		}
 		__syncwarp();
@@ -194,15 +196,25 @@ __device__ void HashTableOperation::finder() {
 		next_result = __shfl_sync(WARP_MASK, to_write, ADDRESS_LANE);
 	}
 
-	instr.foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));
+	if(laneID == src_lane) {
+		if(no_of_found_values != 0) {
+			instr.foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));
+			if(instr.foundvalues == nullptr) {
+				instr.findererror = 1;
+			}
+		}
+		is_active = false;
+	}
+	__syncwarp();
+	uint32_t * result_arr = (uint32_t *)__shfl_sync(WARP_MASK, (ULL)instr.foundvalues, src_lane);
 	next_result = result_list;
 	int no_of_values_added = 0;
 	while(next_result != EMPTY_ADDRESS) {
 		read_data = ReadSlab(next_result, laneID);
 		uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
-		if(read_data != (1llu << 32) - 1) {
-			if(!(laneID & 1) && laneID != ADDRESS_LANE - 1) {
-				instr.foundvalues[no_of_values_added + read_data] = next_lane_data;
+		if(read_data != 0xFFFFFFFF) {
+			if(1 << laneID & VALID_KEY_MASK && result_arr != nullptr) {
+				result_arr[no_of_values_added + read_data] = next_lane_data;
 			}
 		}
 		__syncwarp();
@@ -211,6 +223,4 @@ __device__ void HashTableOperation::finder() {
 		hashtable->slab_alloc->deallocate(result_list);
 		result_list = next_result;
 	}
-
-	is_active = false;
 }
