@@ -88,7 +88,7 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 		int resident_changes;
 
 	public:
-		static const int max_resident_changes = 6;
+		static const int max_resident_changes = 512;
 
 		__device__ ResidentBlock(SlabAlloc *);
 		__device__ void set();		//Chooses a new memory block as a resident block
