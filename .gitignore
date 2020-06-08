@@ -34,3 +34,6 @@ _deps
 
 # Eclipse crap
 /.settings/
+
+# collision detection executable
+/src/collisionDetection/test
