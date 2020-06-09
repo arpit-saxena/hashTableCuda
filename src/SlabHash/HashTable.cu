@@ -42,7 +42,7 @@ __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int lan
 	return hashtable->slab_alloc->SlabAddress(slab_addr, laneID);
 }
 
-__device__ HashTableOperation::HashTableOperation(HashTable * h, ResidentBlock * rb, Instruction ins) {
+__device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb) {
 	hashtable = h;
 	if(rb->slab_alloc != h->slab_alloc) {
 		//TODO: Better way to handle this?
@@ -65,9 +65,9 @@ __device__ void HashTableOperation::run() {
 		src_lane = __ffs(work_queue);
 		assert(src_lane>=1 && src_lane <= 32);
 		--src_lane;
-		Instruction::Type src_instrtype = static_cast<Instruction::Type>(__shfl_sync(WARP_MASK, instr.type, src_lane));
-		src_key = __shfl_sync(WARP_MASK, instr.key, src_lane);
-		src_value = __shfl_sync(WARP_MASK, instr.value, src_lane);
+		Instruction::Type src_instrtype = static_cast<Instruction::Type>(__shfl_sync(WARP_MASK, instr->type, src_lane));
+		src_key = __shfl_sync(WARP_MASK, instr->key, src_lane);
+		src_value = __shfl_sync(WARP_MASK, instr->value, src_lane);
 		unsigned src_bucket = HashFunction::hash(src_key, hashtable->no_of_buckets);
 		if(work_queue != old_work_queue) {
 			next = hashtable->base_slabs[src_bucket];
@@ -98,7 +98,7 @@ __device__ void HashTableOperation::searcher() {
 		--found_lane;
 		uint32_t found_value = __shfl_sync(WARP_MASK, read_data, found_lane+1);
 		if(laneID == src_lane) {
-			instr.value = found_value;
+			instr->value = found_value;
 			is_active = false;
 		}
 	}
@@ -106,7 +106,7 @@ __device__ void HashTableOperation::searcher() {
 		auto next_ptr = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		if(next_ptr == EMPTY_ADDRESS) {
 			if(laneID == src_lane) {
-				instr.value = SEARCH_NOT_FOUND;
+				instr->value = SEARCH_NOT_FOUND;
 				is_active = false;
 			}
 		}
@@ -208,15 +208,16 @@ __device__ void HashTableOperation::finder() {
 
 	if(laneID == src_lane) {
 		if(no_of_found_values != 0) {
-			instr.foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));
-			if(instr.foundvalues == nullptr) {
-				instr.findererror = 1;
+			instr->foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));
+			if(instr->foundvalues == nullptr) {
+				instr->findererror = 1;
 			}
+			instr->no_of_found_values = no_of_found_values;
 		}
 		is_active = false;
 	}
 	__syncwarp();
-	uint32_t * result_arr = (uint32_t *)__shfl_sync(WARP_MASK, (ULL)instr.foundvalues, src_lane);
+	uint32_t * result_arr = (uint32_t *)__shfl_sync(WARP_MASK, (ULL)instr->foundvalues, src_lane);
 	next_result = result_list;
 	int no_of_values_added = 0;
 	while(next_result != EMPTY_ADDRESS) {

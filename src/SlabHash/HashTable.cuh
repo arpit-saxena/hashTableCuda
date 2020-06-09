@@ -47,7 +47,7 @@ struct Instruction {
 class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
 	HashTable* hashtable;
 	ResidentBlock* resident_block;
-	Instruction instr;
+	Instruction * instr;
 	int laneID;
 
 	bool is_active;
@@ -65,7 +65,7 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	__device__ void deleter();
 	__device__ void finder();
 public:
-	__device__ HashTableOperation(HashTable * h, ResidentBlock * rb, Instruction ins);
+	__device__ HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb);
 	__device__ void run();
 };
 
