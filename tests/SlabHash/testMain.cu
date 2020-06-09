@@ -130,7 +130,88 @@ void test2() {
 	gpuErrchk(cudaFree(d_s));
 }
 
+
+__managed__ uint32_t search_success = 0;
+__managed__ uint32_t delete_success = 0;
+__managed__ uint32_t finder_success = 0;
+
+__global__ void kernel3(HashTable * h, SlabAlloc * s) {
+	ResidentBlock rb(s);
+	uint32_t key = blockIdx.x * blockDim.x + threadIdx.x, value = blockIdx.x * blockDim.x + threadIdx.x;
+	Instruction ins;
+	ins.type = Instruction::Type::Insert;
+	ins.key = key;
+	ins.value = value + 1;
+	HashTableOperation op(&ins, h, &rb);
+	op.run();
+
+	ins.type = Instruction::Type::Search;
+	ins.value = SEARCH_NOT_FOUND;
+	op = HashTableOperation(&ins, h, &rb);
+	op.run();
+	if (ins.value != SEARCH_NOT_FOUND && ins.value == value-1) {
+		atomicAdd(&search_success, 1);
+	}
+
+	/*ins.type = Instruction::Type::Insert;
+	ins.key = key+1;
+	ins.value = value;
+	op = HashTableOperation(&ins, h, &rb);
+	op.run();
+
+	ins.type = Instruction::Type::FindAll;
+	ins.key = key;
+	op = HashTableOperation(&ins, h, &rb);
+	op.run();
+	if (ins.no_of_found_values == 2) {
+		if (ins.foundvalues[0] == value && ins.foundvalues[1] == value + 1) {
+			atomicAdd(&finder_success, 1);
+		}
+	}*/
+
+	ins.type = Instruction::Type::Delete;
+	ins.value = value;
+	op = HashTableOperation(&ins, h, &rb);
+	op.run();
+
+	ins.type = Instruction::Type::Search;
+	ins.value = SEARCH_NOT_FOUND;
+	op = HashTableOperation(&ins, h, &rb);
+	op.run();
+	if (ins.value == SEARCH_NOT_FOUND) {
+		atomicAdd(&delete_success, 1);
+	}
+}
+
+void test3() {
+	const ULL numThreads = 1<<12;
+	const ULL numSuperBlocks = 1, numWarps = numThreads >> 5;
+	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
+	SlabAlloc * d_s;
+	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
+	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
+	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<30));
+	
+	int no_of_buckets = numThreads / 128;	// avg slabs per bucket ~ 9-10, assuming 1 insert instruction per thread
+	HashTable * h = new HashTable(no_of_buckets, d_s);
+	HashTable * d_h;
+	gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
+	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
+	
+	int numBlocks = numWarps>>5, threadsPerBlock = 1024;
+	kernel3<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+
+	gpuErrchk(cudaFree(d_h));
+	delete h;
+	gpuErrchk(cudaFree(d_s));
+	delete s;
+
+	printf("searcher() success rate = %f\%\n", (float)search_success * 100 / (float)numThreads);
+	printf("deleter() success rate = %f\%\n", (float)delete_success * 100 / (float)numThreads);
+	printf("finder() success rate = %f\%\n", (float)finder_success*100/(float)numThreads);
+}
+
 int main() {
-	test1();
+	test3();
 	gpuErrchk(cudaDeviceReset());
 }

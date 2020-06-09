@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <stdio.h>
 
-
 __host__ HashTable::HashTable(int size, SlabAlloc * s) {
 	no_of_buckets = size;
 	slab_alloc = s;
@@ -225,6 +224,7 @@ __device__ void HashTableOperation::finder() {
 		uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
 		if(read_data != 0xFFFFFFFF) {
 			if(1 << laneID & VALID_KEY_MASK && result_arr != nullptr) {
+				assert(no_of_values_added + read_data < no_of_found_values);
 				result_arr[no_of_values_added + read_data] = next_lane_data;
 			}
 		}
