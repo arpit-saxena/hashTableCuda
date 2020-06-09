@@ -54,8 +54,7 @@
 #include <cuda_gl_interop.h>
 
 // Utilities and timing functions
-#include <helper_timer.h>
-#include <timer.h>               // timing functions
+#include <my_timer.h>
 
 // CUDA helper functions
 #include <helper_cuda_gl.h>      // helper functions for CUDA/GL interop
@@ -95,7 +94,7 @@ int mouse_buttons = 0;
 float rotate_x = 0.0, rotate_y = 0.0;
 float translate_z = -3.0;
 
-StopWatchInterface *timer = NULL;
+MyTimer timer;
 
 // Auto-Verification Code
 int fpsCount = 0;        // FPS count for averaging
@@ -193,11 +192,13 @@ void computeFPS()
 
     if (fpsCount == fpsLimit)
     {
-        avgFPS = 1.f / (sdkGetAverageTimerValue(&timer) / 1000.f);
+        avgFPS = 1.f / (timer.getAverageTime() / 1000.f);
+        printf("%f\n", avgFPS);
+        fflush(stdout);
         fpsCount = 0;
         fpsLimit = (int)MAX(avgFPS, 1.f);
 
-        sdkResetTimer(&timer);
+        timer.reset();
     }
 
     char fps[256];
@@ -250,8 +251,6 @@ bool initGL(int *argc, char **argv)
 ////////////////////////////////////////////////////////////////////////////////
 bool runTest(int argc, char **argv)
 {
-    // Create the CUTIL timer
-    sdkCreateTimer(&timer);
 
 	// First initialize OpenGL context, so we can properly set the GL for CUDA.
 	// This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
@@ -346,7 +345,7 @@ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
 ////////////////////////////////////////////////////////////////////////////////
 void display()
 {
-    sdkStartTimer(&timer);
+    timer.start();
 
     // run CUDA kernel to generate vertex positions
     runCuda(&cuda_vbo_resource);
@@ -373,7 +372,7 @@ void display()
 
     g_fAnim += 0.01f;
 
-    sdkStopTimer(&timer);
+    timer.stop();
     computeFPS();
 }
 
@@ -388,8 +387,6 @@ void timerEvent(int value)
 
 void cleanup()
 {
-    sdkDeleteTimer(&timer);
-
     if (vbo)
     {
         deleteVBO(&vbo, cuda_vbo_resource);
