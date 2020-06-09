@@ -51,7 +51,6 @@ float MyTimer::getAverageTime() {
 	auto ret = totalTimeElapsed;
 	if (!stopped) ret += sc::steady_clock::now() - startTime;
 	if (numSessions == 0) return 0;
-	printf("%d %d\n", numSessions, sc::duration_cast<sc::milliseconds>(ret).count() / numSessions);
 	return sc::duration_cast<sc::milliseconds>(ret).count() / numSessions;
 }
 

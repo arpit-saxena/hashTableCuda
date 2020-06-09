@@ -193,8 +193,6 @@ void computeFPS()
     if (fpsCount == fpsLimit)
     {
         avgFPS = 1.f / (timer.getAverageTime() / 1000.f);
-        printf("%f\n", avgFPS);
-        fflush(stdout);
         fpsCount = 0;
         fpsLimit = (int)MAX(avgFPS, 1.f);
 
