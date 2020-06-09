@@ -118,8 +118,7 @@ __device__ void SlabAlloc::deallocate(Address addr){		//Doesn't need a full warp
 	// TODO Check for divergence here
 }
 
-__device__ ResidentBlock::ResidentBlock(SlabAlloc * s) {
-	slab_alloc = s;
+__device__ ResidentBlock::ResidentBlock(SlabAlloc * s) : slab_alloc(s) {
 	resident_changes = -1;
 	set();
 }

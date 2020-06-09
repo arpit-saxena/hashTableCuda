@@ -1,6 +1,7 @@
 #include "HashTable.cuh"
 #include "HashFunction.cuh"
 #include <assert.h>
+#include <stdio.h>
 
 
 __host__ HashTable::HashTable(int size, SlabAlloc * s) {
@@ -43,6 +44,15 @@ __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int lan
 
 __device__ HashTableOperation::HashTableOperation(HashTable * h, ResidentBlock * rb, Instruction ins) {
 	hashtable = h;
+	if(rb->slab_alloc != h->slab_alloc) {
+		//TODO: Better way to handle this?
+		printf("Block:%d,Thread:%d->The resident block and the hashtable passed must have the same SlabAlloc object!\n", blockIdx.x, threadIdx.x);
+		rb->slab_alloc->status = 3;
+		__threadfence();
+		int SlabAllocsnotconsistent = 0;
+		assert(SlabAllocsnotconsistent);
+		asm("trap;");
+	}
 	resident_block = rb;
 	instr = ins;
 	is_active = true;
