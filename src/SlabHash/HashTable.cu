@@ -123,7 +123,7 @@ __device__ void HashTableOperation::inserter() {
 		if(next_ptr == EMPTY_ADDRESS) {
 			auto new_slab_ptr = resident_block->warp_allocate();
 			if(laneID == ADDRESS_LANE) {
-				auto oldptr = atomicCAS((ULL *) SlabAddress(next, laneID), EMPTY_ADDRESS, new_slab_ptr);
+				auto oldptr = atomicCAS(SlabAddress(next, laneID), EMPTY_ADDRESS, new_slab_ptr);
 				if(oldptr != EMPTY_ADDRESS) {
 					hashtable->slab_alloc->deallocate(new_slab_ptr);
 				}
