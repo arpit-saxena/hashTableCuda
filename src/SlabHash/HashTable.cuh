@@ -39,6 +39,7 @@ struct Instruction {
 
 	// Results from finder()
 	uint32_t * foundvalues = nullptr;		//Will be set to point to an array in global memory by finder
+	int no_of_found_values = -1;
 	int findererror = 0;	//Will be set to 1 if foundvalues couldn't be malloc'ed due to insufficient heap memory
 
 	__device__ ~Instruction();
@@ -65,7 +66,7 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	__device__ void deleter();
 	__device__ void finder();
 public:
-	__device__ HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb);
+	__device__ HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb, bool is_active = true);
 	__device__ void run();
 };
 

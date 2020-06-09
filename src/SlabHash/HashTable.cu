@@ -42,7 +42,7 @@ __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int lan
 	return hashtable->slab_alloc->SlabAddress(slab_addr, laneID);
 }
 
-__device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb) {
+__device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb, bool is_active) {
 	hashtable = h;
 	if(rb->slab_alloc != h->slab_alloc) {
 		//TODO: Better way to handle this?
@@ -55,7 +55,7 @@ __device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable *
 	}
 	resident_block = rb;
 	instr = ins;
-	is_active = true;
+	this->is_active = is_active;
 	laneID = threadIdx.x % warpSize;
 }
 
