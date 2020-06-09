@@ -29,7 +29,7 @@
 
 #ifdef __DRIVER_TYPES_H__
 #ifndef DEVICE_RESET
-#define DEVICE_RESET cudaDeviceReset()
+#define DEVICE_RESET cudaDeviceReset();
 #endif
 #else
 #ifndef DEVICE_RESET
@@ -40,85 +40,6 @@
 #ifdef __CUDA_GL_INTEROP_H__
 ////////////////////////////////////////////////////////////////////////////////
 // These are CUDA OpenGL Helper functions
-
-inline int gpuGLDeviceInit(int ARGC, const char **ARGV)
-{
-    int deviceCount;
-    checkCudaErrors(cudaGetDeviceCount(&deviceCount));
-
-    if (deviceCount == 0)
-    {
-        fprintf(stderr, "CUDA error: no devices supporting CUDA.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    int dev = 0;
-    dev = getCmdLineArgumentInt(ARGC, ARGV, "device=");
-
-    if (dev < 0)
-    {
-        dev = 0;
-    }
-
-    if (dev > deviceCount-1)
-    {
-        fprintf(stderr, "\n");
-        fprintf(stderr, ">> %d CUDA capable GPU device(s) detected. <<\n", deviceCount);
-        fprintf(stderr, ">> gpuGLDeviceInit (-device=%d) is not a valid GPU device. <<\n", dev);
-        fprintf(stderr, "\n");
-        return -dev;
-    }
-
-    cudaDeviceProp deviceProp;
-    checkCudaErrors(cudaGetDeviceProperties(&deviceProp, dev));
-
-    if (deviceProp.computeMode == cudaComputeModeProhibited)
-    {
-        fprintf(stderr, "Error: device is running in <Compute Mode Prohibited>, no threads can use ::cudaSetDevice().\n");
-        return -1;
-    }
-
-    if (deviceProp.major < 1)
-    {
-        fprintf(stderr, "Error: device does not support CUDA.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if (checkCmdLineFlag(ARGC, ARGV, "quiet") == false)
-    {
-        fprintf(stderr, "Using device %d: %s\n", dev, deviceProp.name);
-    }
-
-    checkCudaErrors(cudaGLSetGLDevice(dev));
-    return dev;
-}
-
-// This function will pick the best CUDA device available with OpenGL interop
-inline int findCudaGLDevice(int argc, const char **argv)
-{
-    int devID = 0;
-
-    // If the command-line has a device number specified, use it
-    if (checkCmdLineFlag(argc, (const char **)argv, "device"))
-    {
-        devID = gpuGLDeviceInit(argc, (const char **)argv);
-
-        if (devID < 0)
-        {
-            printf("no CUDA capable devices found, exiting...\n");
-            DEVICE_RESET
-            exit(EXIT_SUCCESS);
-        }
-    }
-    else
-    {
-        // Otherwise pick the device with highest Gflops/s
-        devID = gpuGetMaxGflopsDeviceId();
-        cudaGLSetGLDevice(devID);
-    }
-
-    return devID;
-}
 
 static inline const char* glErrorToString(GLenum err)
 {
@@ -140,6 +61,7 @@ static inline const char* glErrorToString(GLenum err)
 #undef CASE_RETURN_MACRO
     return "*UNKNOWN*";
 }
+
 ////////////////////////////////////////////////////////////////////////////
 //! Check for OpenGL error
 //! @return bool if no GL error has been encountered, otherwise 0
