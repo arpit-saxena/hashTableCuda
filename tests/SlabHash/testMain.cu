@@ -137,11 +137,11 @@ __managed__ uint32_t finder_success = 0;
 
 __global__ void kernel3(HashTable * h, SlabAlloc * s) {
 	ResidentBlock rb(s);
-	uint32_t key = blockIdx.x * blockDim.x + threadIdx.x, value = blockIdx.x * blockDim.x + threadIdx.x;
+	uint32_t key = blockIdx.x, value = threadIdx.x;
 	Instruction ins;
 	ins.type = Instruction::Type::Insert;
 	ins.key = key;
-	ins.value = value + 1;
+	ins.value = value;
 	HashTableOperation op(&ins, h, &rb);
 	op.run();
 
@@ -149,31 +149,32 @@ __global__ void kernel3(HashTable * h, SlabAlloc * s) {
 	ins.value = SEARCH_NOT_FOUND;
 	op = HashTableOperation(&ins, h, &rb);
 	op.run();
-	if (ins.value != SEARCH_NOT_FOUND && ins.value == value-1) {
+	if (ins.value != SEARCH_NOT_FOUND) {
 		atomicAdd(&search_success, 1);
 	}
 
-	/*ins.type = Instruction::Type::Insert;
-	ins.key = key+1;
-	ins.value = value;
-	op = HashTableOperation(&ins, h, &rb);
-	op.run();
-
+	__syncthreads();
 	ins.type = Instruction::Type::FindAll;
 	ins.key = key;
-	op = HashTableOperation(&ins, h, &rb);
+	if(threadIdx.x == 0)
+		op = HashTableOperation(&ins, h, &rb);
+	else
+		op = HashTableOperation(&ins, h, &rb, false);
 	op.run();
-	if (ins.no_of_found_values == 2) {
-		if (ins.foundvalues[0] == value && ins.foundvalues[1] == value + 1) {
+	if (threadIdx.x == 0 && ins.no_of_found_values == blockDim.x) {
+		if (ins.foundvalues[0] >= 0 && ins.foundvalues[1] >= 0
+			&& ins.foundvalues[0] < blockDim.x && ins.foundvalues[1] < blockDim.x) {
 			atomicAdd(&finder_success, 1);
 		}
-	}*/
+	}
+	__syncthreads();
 
 	ins.type = Instruction::Type::Delete;
 	ins.value = value;
 	op = HashTableOperation(&ins, h, &rb);
 	op.run();
 
+	__syncthreads();
 	ins.type = Instruction::Type::Search;
 	ins.value = SEARCH_NOT_FOUND;
 	op = HashTableOperation(&ins, h, &rb);
@@ -184,7 +185,7 @@ __global__ void kernel3(HashTable * h, SlabAlloc * s) {
 }
 
 void test3() {
-	const ULL numThreads = 1<<12;
+	const ULL numThreads = 1<<18;
 	const ULL numSuperBlocks = 1, numWarps = numThreads >> 5;
 	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
 	SlabAlloc * d_s;

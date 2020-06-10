@@ -185,11 +185,12 @@ __device__ void HashTableOperation::finder() {
 		uint32_t mask = (WARP_MASK) >> (31-laneID);
 		uint32_t to_write = 0xFFFFFFFF;
 		next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
+		uint32_t nextslab = EMPTY_ADDRESS;
 		if(next != EMPTY_ADDRESS) {
-			uint32_t nextslab = resident_block->warp_allocate();
-			if(laneID == ADDRESS_LANE) {
-				to_write = nextslab;
-			}
+			nextslab = resident_block->warp_allocate();
+		}
+		if (laneID == ADDRESS_LANE) {
+			to_write = nextslab;
 		}
 		else if(laneID == ADDRESS_LANE - 1) {
 			to_write = __popc(found_key_lanes);
@@ -202,7 +203,7 @@ __device__ void HashTableOperation::finder() {
 		}
 		__syncwarp();
 		*SlabAddress(next_result, laneID) = to_write;
-		next_result = __shfl_sync(WARP_MASK, to_write, ADDRESS_LANE);
+		next_result = nextslab;
 	}
 
 	if(laneID == src_lane) {
