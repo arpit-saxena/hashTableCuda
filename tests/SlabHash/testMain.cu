@@ -207,9 +207,37 @@ void test3() {
 	gpuErrchk(cudaFree(d_s));
 	delete s;
 
-	printf("searcher() success rate = %f\%\n", (float)search_success * 100 / (float)numThreads);
-	printf("deleter() success rate = %f\%\n", (float)delete_success * 100 / (float)numThreads);
-	printf("finder() success rate = %f\%\n", (float)finder_success*100/(float)numThreads);
+	printf("searcher() success rate = %f%\n", (float)search_success * 100 / (float)numThreads);
+	printf("deleter() success rate = %f%\n", (float)delete_success * 100 / (float)numThreads);
+	printf("finder() success rate = %f%\n", (float)finder_success*100/((float)numThreads/threadsPerBlock));
+}
+
+
+__global__ void kernel4(SlabAlloc* s) {
+	ResidentBlock rb(s);
+	Address a = rb.warp_allocate();
+	uint32_t left = threadIdx.x, right = threadIdx.x + 5;
+	uint32_t data[2] = { left, right };
+	if (1 << laneID() & VALID_KEY_MASK) {
+		*(ULL*)(s->SlabAddress(a, laneID())) = *reinterpret_cast<ULL *>(data);
+		//assert(atomicCAS((ULL*)(s->SlabAddress(a, laneID())), (ULL)0xFFFFFFFFFFFFFFFF, *((ULL*)data)) == (ULL)0xFFFFFFFFFFFFFFFF);
+		assert(*(s->SlabAddress(a, laneID())) == left);
+		assert(*(s->SlabAddress(a, laneID()+1)) == right);
+	}
+}
+
+void test4() {
+	const ULL numWarps = 1, numSuperBlocks = 1;
+	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
+	SlabAlloc * d_s;
+	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
+	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
+	int numBlocks = numWarps, threadsPerBlock = 32;
+	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<28));
+
+	kernel4<<<numBlocks,threadsPerBlock>>>(d_s);
+
+	gpuErrchk(cudaFree(d_s));
 }
 
 int main() {

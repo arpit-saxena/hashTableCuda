@@ -30,7 +30,8 @@ __device__ Instruction::~Instruction() {
 }
 
 __device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
-	return ((ULL)key << 32) + value;
+	uint32_t pair[] = { key, value };
+	return *reinterpret_cast<ULL *>(pair);
 }
 
 __device__ uint32_t HashTableOperation::ReadSlab(Address slab_addr, int laneID) {
