@@ -29,8 +29,8 @@ CTestTestfile.cmake
 _deps
 
 # Visual Studio crap
-/.vs/
-/out/
+.vs/
+out/
 
 # Eclipse crap
 /.settings/
