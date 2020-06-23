@@ -136,8 +136,11 @@ __device__ void HashTableOperation::inserter() {
 				auto oldptr = atomicCAS(SlabAddress(next, laneID), EMPTY_ADDRESS, new_slab_ptr);
 				if(oldptr != EMPTY_ADDRESS) {
 					hashtable->slab_alloc->deallocate(new_slab_ptr);
+					new_slab_ptr = oldptr;
 				}
 			}
+			__syncwarp();
+			next = __shfl_sync(WARP_MASK, new_slab_ptr, ADDRESS_LANE);
 		}
 		else {
 			next = next_ptr;
