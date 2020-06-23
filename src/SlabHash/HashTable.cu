@@ -61,15 +61,16 @@ __device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable *
 
 __device__ void HashTableOperation::run() {
 	uint32_t work_queue = __ballot_sync(WARP_MASK, is_active), old_work_queue = 0;
+	Instruction::Type src_instrtype;
 	while(work_queue != 0) {
-		src_lane = __ffs(work_queue);
-		assert(src_lane>=1 && src_lane <= 32);
-		--src_lane;
-		Instruction::Type src_instrtype = static_cast<Instruction::Type>(__shfl_sync(WARP_MASK, instr->type, src_lane));
-		src_key = __shfl_sync(WARP_MASK, instr->key, src_lane);
-		src_value = __shfl_sync(WARP_MASK, instr->value, src_lane);
-		unsigned src_bucket = HashFunction::hash(src_key, hashtable->no_of_buckets);
 		if(work_queue != old_work_queue) {
+			src_lane = __ffs(work_queue);
+			assert(src_lane>=1 && src_lane <= 32);
+			--src_lane;
+			src_instrtype = static_cast<Instruction::Type>(__shfl_sync(WARP_MASK, instr->type, src_lane));
+			src_key = __shfl_sync(WARP_MASK, instr->key, src_lane);
+			src_value = __shfl_sync(WARP_MASK, instr->value, src_lane);
+			unsigned src_bucket = HashFunction::hash(src_key, hashtable->no_of_buckets);
 			next = hashtable->base_slabs[src_bucket];
 		}
 		read_data = ReadSlab(next, laneID);
