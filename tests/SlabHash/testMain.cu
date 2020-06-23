@@ -135,7 +135,7 @@ __managed__ uint32_t search_success = 0;
 __managed__ uint32_t delete_success = 0;
 __managed__ uint32_t finder_success = 0;
 
-__global__ void kernel3(HashTable * h, SlabAlloc * s) {
+__global__ void kernel3ins(HashTable* h, SlabAlloc* s) {
 	ResidentBlock rb(s);
 	uint32_t key = blockIdx.x, value = threadIdx.x;
 	Instruction ins;
@@ -144,40 +144,59 @@ __global__ void kernel3(HashTable * h, SlabAlloc * s) {
 	ins.value = value;
 	HashTableOperation op(&ins, h, &rb);
 	op.run();
+}
 
+__global__ void kernel3inscheck(HashTable* h, SlabAlloc* s) {
+	ResidentBlock rb(s);
+	uint32_t key = blockIdx.x, value = threadIdx.x;
+	Instruction ins;
 	ins.type = Instruction::Type::Search;
+	ins.key = key;
 	ins.value = SEARCH_NOT_FOUND;
-	op = HashTableOperation(&ins, h, &rb);
+	HashTableOperation op(&ins, h, &rb);
 	op.run();
 	if (ins.value != SEARCH_NOT_FOUND) {
 		atomicAdd(&search_success, 1);
 	}
+}
 
-	__syncthreads();
+__global__ void kernel3find(HashTable* h, SlabAlloc* s) {
+	ResidentBlock rb(s);
+	uint32_t key = blockIdx.x, value = threadIdx.x;
+	Instruction ins;
 	ins.type = Instruction::Type::FindAll;
 	ins.key = key;
-	if(threadIdx.x == 0)
-		op = HashTableOperation(&ins, h, &rb);
-	else
-		op = HashTableOperation(&ins, h, &rb, false);
+	HashTableOperation op(&ins, h, &rb, threadIdx.x == 0);
+	__syncwarp();
 	op.run();
 	if (threadIdx.x == 0 && ins.no_of_found_values == blockDim.x) {
-		if (ins.foundvalues[0] >= 0 && ins.foundvalues[1] >= 0
-			&& ins.foundvalues[0] < blockDim.x && ins.foundvalues[1] < blockDim.x) {
-			atomicAdd(&finder_success, 1);
+		if (ins.findererror == 0) {
+			if (ins.foundvalues[0] < blockDim.x && ins.foundvalues[1] < blockDim.x) {
+				atomicAdd(&finder_success, 1);
+			}
 		}
 	}
-	__syncthreads();
+}
 
+__global__ void kernel3del(HashTable* h, SlabAlloc* s) {
+	ResidentBlock rb(s);
+	uint32_t key = blockIdx.x, value = threadIdx.x;
+	Instruction ins;
 	ins.type = Instruction::Type::Delete;
+	ins.key = key;
 	ins.value = value;
-	op = HashTableOperation(&ins, h, &rb);
+	HashTableOperation op(&ins, h, &rb);
 	op.run();
+}
 
-	__syncthreads();
+__global__ void kernel3delcheck(HashTable* h, SlabAlloc* s) {
+	ResidentBlock rb(s);
+	uint32_t key = blockIdx.x, value = threadIdx.x;
+	Instruction ins;
 	ins.type = Instruction::Type::Search;
+	ins.key = key;
 	ins.value = SEARCH_NOT_FOUND;
-	op = HashTableOperation(&ins, h, &rb);
+	HashTableOperation op(&ins, h, &rb);
 	op.run();
 	if (ins.value == SEARCH_NOT_FOUND) {
 		atomicAdd(&delete_success, 1);
@@ -200,7 +219,11 @@ void test3() {
 	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
 	
 	int numBlocks = numWarps>>5, threadsPerBlock = 1024;
-	kernel3<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	kernel3find<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 
 	gpuErrchk(cudaFree(d_h));
 	delete h;
