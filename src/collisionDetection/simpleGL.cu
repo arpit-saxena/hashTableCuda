@@ -315,7 +315,8 @@ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
     unsigned int size = mesh_width * mesh_height * 4 * sizeof(float);
     glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glInvalidateBufferData(*vbo);
+    //glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     // register this buffer object with CUDA
     gpuErrchk(cudaGraphicsGLRegisterBuffer(vbo_res, *vbo, vbo_res_flags));

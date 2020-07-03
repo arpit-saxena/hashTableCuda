@@ -8,9 +8,9 @@ enable_language(CUDA)
 
 find_package(OpenGL REQUIRED)
 find_package(GLUT REQUIRED)
-INCLUDE_DIRECTORIES(includes .. ${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(includes .. ${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS} ${ASSIMP_INCLUDE_DIRS})
 	
 #set(CMAKE_CUDA_FLAGS "-G -g")
 add_executable(test simpleGL.cu)
-target_link_libraries(test ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+target_link_libraries(test ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${ASSIMP_LIBRARIES})
 set_target_properties(test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

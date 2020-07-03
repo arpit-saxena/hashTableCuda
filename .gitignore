@@ -37,3 +37,7 @@ _deps
 
 # collisionDetection binary
 /src/collisionDetection/test
+/src/collisionDetection/build
+
+#VS Code Stuff
+.vscode
