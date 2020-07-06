@@ -135,12 +135,12 @@ __managed__ uint32_t search_success = 0;
 __managed__ uint32_t delete_success = 0;
 __managed__ uint32_t finder_success = 0;
 
-__device__ inline uint32_t key() {		return blockIdx.x;	}
-__device__ inline uint32_t value() {	return threadIdx.x;	}
+__device__ inline uint32_t Key() {		return blockIdx.x;	}
+__device__ inline uint32_t Value() {	return threadIdx.x;	}
 
 __global__ void kernel3ins(HashTable* h, SlabAlloc* s) {
 	ResidentBlock rb(s);
-	uint32_t key = key(), value = value();
+	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Insert;
 	ins.key = key;
@@ -151,7 +151,7 @@ __global__ void kernel3ins(HashTable* h, SlabAlloc* s) {
 
 __global__ void kernel3inscheck(HashTable* h, SlabAlloc* s) {
 	ResidentBlock rb(s);
-	uint32_t key = key(), value = value();
+	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Search;
 	ins.key = key;
@@ -165,7 +165,7 @@ __global__ void kernel3inscheck(HashTable* h, SlabAlloc* s) {
 
 __global__ void kernel3find(HashTable* h, SlabAlloc* s) {
 	ResidentBlock rb(s);
-	uint32_t key = key(), value = value();
+	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::FindAll;
 	ins.key = key;
@@ -183,7 +183,7 @@ __global__ void kernel3find(HashTable* h, SlabAlloc* s) {
 
 __global__ void kernel3del(HashTable* h, SlabAlloc* s) {
 	ResidentBlock rb(s);
-	uint32_t key = key(), value = value();
+	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Delete;
 	ins.key = key;
@@ -194,7 +194,7 @@ __global__ void kernel3del(HashTable* h, SlabAlloc* s) {
 
 __global__ void kernel3delcheck(HashTable* h, SlabAlloc* s) {
 	ResidentBlock rb(s);
-	uint32_t key = key(), value = value();
+	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Search;
 	ins.key = key;
