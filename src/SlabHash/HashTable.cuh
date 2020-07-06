@@ -14,6 +14,12 @@ typedef unsigned long long ULL;
 
 namespace utilitykernel {
 	__global__ void init_table(int, SlabAlloc *, Address *);
+	__global__ void findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, 
+		Address* base_slabs, SlabAlloc* slab_alloc, unsigned no_of_buckets,
+		void (*callback)(uint32_t key, uint32_t value));
+
+	//Sample callback as default
+	__device__ void default_callback(uint32_t key, uint32_t value);
 }
 
 class HashTable {		// a single object of this will be made on host, and copied to global device memory
@@ -21,8 +27,11 @@ class HashTable {		// a single object of this will be made on host, and copied t
 		SlabAlloc * slab_alloc;
 		unsigned no_of_buckets;
 	public:
+		// Needs to be called with the SlabAlloc pointer pointing to an object placed in device memory
 		__host__ HashTable(int size, SlabAlloc * s);
 		__host__ ~HashTable();
+		__host__ void findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value));
+
 		friend class HashTableOperation;
 };
 
@@ -30,19 +39,11 @@ struct Instruction {
 	enum Type {
 		Insert,
 		Delete,
-		Search,
-		FindAll
+		Search
 	};
 	
 	Type type;
 	uint32_t key, value;
-
-	// Results from finder()
-	uint32_t * foundvalues = nullptr;		//Will be set to point to an array in global memory by finder
-	int no_of_found_values = -1;
-	int findererror = 0;	//Will be set to 1 if foundvalues couldn't be malloc'ed due to insufficient heap memory
-
-	__device__ ~Instruction();
 };
 
 class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
@@ -64,7 +65,6 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	__device__ void inserter();
 	__device__ void searcher();
 	__device__ void deleter();
-	__device__ void finder();
 public:
 	__device__ HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb, bool is_active = true);
 	__device__ void run();

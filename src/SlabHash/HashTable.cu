@@ -24,11 +24,6 @@ __host__ HashTable::~HashTable() {
 	cudaFree(base_slabs);
 }
 
-__device__ Instruction::~Instruction() {
-	if(foundvalues)	free(foundvalues);
-	foundvalues = nullptr;
-}
-
 __device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
 	uint32_t pair[] = { key, value };
 	return *reinterpret_cast<ULL *>(pair);
@@ -83,9 +78,6 @@ __device__ void HashTableOperation::run() {
 				break;
 			case Instruction::Search:
 				searcher();
-				break;
-			case Instruction::FindAll:
-				finder();
 				break;
 		}
 		old_work_queue = work_queue;
@@ -176,68 +168,39 @@ __device__ void HashTableOperation::deleter() {
 	}
 }
 
+__host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value)) {
+	unsigned no_of_threads = no_of_keys * 32;
+	uint32_t * d_keys;
+	cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t));
+	cudaMemcpy(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault);
+	int threads_per_block = 64, blocks = CEILDIV(no_of_threads, threads_per_block);
+	utilitykernel::findvalueskernel<<<blocks, threads_per_block>>>(d_keys, no_of_keys, base_slabs, slab_alloc, no_of_buckets, callback);
+}
+
 // If some warp divergence bullshit crops up, rewrite this function to have 1 lane
 // do all the collation of the found values into an array
-__device__ void HashTableOperation::finder() {
-	Address result_list = resident_block->warp_allocate();
-	Address next_result = result_list;
-	int no_of_found_values = 0;
-	while(next != EMPTY_ADDRESS) {
-		read_data = ReadSlab(next, laneID);
-		uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == src_key);
-		no_of_found_values += __popc(found_key_lanes);
-		uint32_t found_value_lanes = found_key_lanes << 1;
-		uint32_t mask = (WARP_MASK) >> (31-laneID);
-		uint32_t to_write = 0xFFFFFFFF;
-		next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
-		uint32_t nextslab = EMPTY_ADDRESS;
-		if(next != EMPTY_ADDRESS) {
-			nextslab = resident_block->warp_allocate();
+__global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
+												SlabAlloc* slab_alloc, unsigned no_of_buckets,
+												void (*callback)(uint32_t key, uint32_t value) = utilitykernel::default_callback) {
+	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
+	if(global_warp_id < no_of_keys) {
+		const int laneID = threadIdx.x % warpSize;
+		const uint32_t src_key = d_keys[global_warp_id];
+		const unsigned src_bucket = HashFunction::hash(src_key, no_of_buckets);
+		Address next = base_slabs[src_bucket];
+		while(next != EMPTY_ADDRESS) {
+			uint32_t read_data = slab_alloc->ReadSlab(next, laneID);
+			uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
+			uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == src_key);
+			if(found_key_lanes & 1 << laneID ) {
+				callback(read_data, next_lane_data);
+			}
+			__syncwarp();
+			next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		}
-		if (laneID == ADDRESS_LANE) {
-			to_write = nextslab;
-		}
-		else if(laneID == ADDRESS_LANE - 1) {
-			to_write = __popc(found_key_lanes);
-		}
-		else if(found_key_lanes & 1 << laneID ) {
-			to_write = __popc(found_value_lanes & mask);
-		}
-		else if(found_value_lanes & 1 << laneID) {
-			to_write = read_data;
-		}
-		__syncwarp();
-		*SlabAddress(next_result, laneID) = to_write;
-		next_result = nextslab;
 	}
+}
 
-	if(laneID == src_lane) {
-		if(no_of_found_values != 0) {
-			instr->foundvalues = (uint32_t *) malloc(no_of_found_values * sizeof(uint32_t));
-			if(instr->foundvalues == nullptr) {
-				instr->findererror = 1;
-			}
-			instr->no_of_found_values = no_of_found_values;
-		}
-		is_active = false;
-	}
-	__syncwarp();
-	uint32_t * result_arr = (uint32_t *)__shfl_sync(WARP_MASK, (ULL)instr->foundvalues, src_lane);
-	next_result = result_list;
-	int no_of_values_added = 0;
-	while(next_result != EMPTY_ADDRESS) {
-		read_data = ReadSlab(next_result, laneID);
-		uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
-		if(read_data != 0xFFFFFFFF) {
-			if(1 << laneID & VALID_KEY_MASK && result_arr != nullptr) {
-				assert(no_of_values_added + read_data < no_of_found_values);
-				result_arr[no_of_values_added + read_data] = next_lane_data;
-			}
-		}
-		__syncwarp();
-		no_of_values_added += __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE - 1);
-		next_result = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
-		hashtable->slab_alloc->deallocate(result_list);
-		result_list = next_result;
-	}
+__device__ void utilitykernel::default_callback(uint32_t key, uint32_t value) {
+	return;
 }
