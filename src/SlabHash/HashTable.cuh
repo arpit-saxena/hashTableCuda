@@ -17,9 +17,6 @@ namespace utilitykernel {
 	__global__ void findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, 
 		Address* base_slabs, SlabAlloc* slab_alloc, unsigned no_of_buckets,
 		void (*callback)(uint32_t key, uint32_t value));
-
-	//Sample callback as default
-	__device__ void default_callback(uint32_t key, uint32_t value);
 }
 
 class HashTable {		// a single object of this will be made on host, and copied to global device memory

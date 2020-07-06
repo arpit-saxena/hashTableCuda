@@ -181,7 +181,7 @@ __host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (
 // do all the collation of the found values into an array
 __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
 												SlabAlloc* slab_alloc, unsigned no_of_buckets,
-												void (*callback)(uint32_t key, uint32_t value) = utilitykernel::default_callback) {
+												void (*callback)(uint32_t key, uint32_t value)) {
 	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 	if(global_warp_id < no_of_keys) {
 		const int laneID = threadIdx.x % warpSize;
@@ -199,8 +199,4 @@ __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of
 			next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		}
 	}
-}
-
-__device__ void utilitykernel::default_callback(uint32_t key, uint32_t value) {
-	return;
 }
