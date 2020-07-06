@@ -105,6 +105,10 @@ __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
 	return (superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
 }
 
+__device__ uint32_t SlabAlloc::ReadSlab(Address slab_addr, int laneID) {
+	return *(SlabAddress(slab_addr, laneID));
+}
+
 __device__ void SlabAlloc::deallocate(Address addr){		//Doesn't need a full warp
 	unsigned global_memory_block_no = addr >> SLAB_BITS;
 	unsigned memory_unit_no = addr & ((1<<SLAB_BITS)-1);		//addr%1024, basically

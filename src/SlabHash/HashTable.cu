@@ -35,7 +35,7 @@ __device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
 }
 
 __device__ uint32_t HashTableOperation::ReadSlab(Address slab_addr, int laneID) {
-	return *(SlabAddress(slab_addr, laneID));
+	return hashtable->slab_alloc->ReadSlab(slab_addr, laneID);
 }
 
 __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int laneID) {
