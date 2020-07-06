@@ -163,22 +163,19 @@ __global__ void kernel3inscheck(HashTable* h, SlabAlloc* s) {
 	}
 }
 
-__global__ void kernel3find(HashTable* h, SlabAlloc* s) {
-	ResidentBlock rb(s);
-	uint32_t key = Key(), value = Value();
-	Instruction ins;
-	ins.type = Instruction::Type::FindAll;
-	ins.key = key;
-	HashTableOperation op(&ins, h, &rb, threadIdx.x == 0);
-	__syncwarp();
-	op.run();
-	if (threadIdx.x == 0 && ins.no_of_found_values == blockDim.x) {
-		if (ins.findererror == 0) {
-			if (ins.foundvalues[0] < blockDim.x && ins.foundvalues[1] < blockDim.x) {
-				atomicAdd(&finder_success, 1);
-			}
-		}
+__device__ void callBack(uint32_t key, uint32_t value) {
+	atomicAdd(&finder_success, 1);
+}
+__device__ void (*d_callBack)(uint32_t, uint32_t) = callBack;
+void findvaluescheck(HashTable * h, int numBlocks, int threadsPerBlock) {
+	uint32_t * keys = new uint32_t[numBlocks];
+	for(int i = 0; i < numBlocks; ++i) {
+		keys[i] = i;
 	}
+	void* h_callBack;
+	gpuErrchk(cudaMemcpyFromSymbol(&h_callBack, d_callBack, sizeof(&callBack)));
+	h->findvalues(keys, numBlocks, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack));
+	delete[]keys;
 }
 
 __global__ void kernel3del(HashTable* h, SlabAlloc* s) {
@@ -224,7 +221,7 @@ void test3() {
 	int numBlocks = numWarps>>5, threadsPerBlock = 1024;
 	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 	kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
-	kernel3find<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	findvaluescheck(h, numBlocks, threadsPerBlock);
 	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 	kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 
@@ -235,7 +232,7 @@ void test3() {
 
 	printf("searcher() success rate = %f%\n", (float)search_success * 100 / (float)numThreads);
 	printf("deleter() success rate = %f%\n", (float)delete_success * 100 / (float)numThreads);
-	printf("finder() success rate = %f%\n", (float)finder_success*100/((float)numThreads/threadsPerBlock));
+	printf("finder() success rate = %f%\n", (float)finder_success*100/(float)numThreads);
 }
 
 
