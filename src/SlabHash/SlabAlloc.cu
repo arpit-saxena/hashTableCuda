@@ -68,7 +68,7 @@ Address SlabAlloc::makeAddress(uint32_t superBlock_idx, uint32_t memoryBlock_idx
 // Currently called with full warp only, so it also assumes full warp
 __device__ int SlabAlloc::allocateSuperBlock() {
 	assert(__activemask() == WARP_MASK);
-	int workerThreadIdx = 0;
+	const int workerThreadIdx = 0;
 	int localIdx = -1;
 	if (__laneID == workerThreadIdx) {
 		int numSuper = numSuperBlocks; // Get a local copy of the variable
@@ -110,10 +110,10 @@ __device__ uint32_t SlabAlloc::ReadSlab(Address slab_addr, int laneID) {
 }
 
 __device__ void SlabAlloc::deallocate(Address addr){		//Doesn't need a full warp
-	unsigned global_memory_block_no = addr >> SLAB_BITS;
-	unsigned memory_unit_no = addr & ((1<<SLAB_BITS)-1);		//addr%1024, basically
-	unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 	if(__laneID == __ffs(__activemask()) - 1){
+		unsigned global_memory_block_no = addr >> SLAB_BITS;
+		unsigned memory_unit_no = addr & ((1<<SLAB_BITS)-1);		//addr%1024, basically
+		unsigned lane_no = memory_unit_no / 32, slab_no = memory_unit_no % 32;
 		BlockBitMap * resident_bitmap = bitmaps + global_memory_block_no;
 		uint32_t * global_bitmap_line = resident_bitmap->bitmap + lane_no;
 		atomicAnd(global_bitmap_line, ~(1u << slab_no));
@@ -152,18 +152,15 @@ __device__ void ResidentBlock::set() {
 
 __device__ Address ResidentBlock::warp_allocate() {
 	//TODO remove this loop maybe
-	Address allocated_address = EMPTY_ADDRESS;
-	const int max_allowed_superblock_changes = 2;
-	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
-	int allocator_thread_no = -1;
 	int memoryblock_changes = 0;
 	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
-		int slab_no;
+		int slab_no, allocator_thread_no;
 		while (true) {		//Review this loop
 			slab_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, resident_bitmap_line);
 			allocator_thread_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
 			if (allocator_thread_no == -1) { // All memory units are full in the memory block
+				const int max_allowed_memoryblock_changes = 2 /*max_allowed_superblock_changes*/ * max_resident_changes;
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
 					slab_alloc->status = 1;
 					__threadfence();
@@ -178,7 +175,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 				break;
 			}
 		}
-
+		
+		Address allocated_address = EMPTY_ADDRESS;
 		if (__laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;
 			auto global_memory_block_no = starting_addr >> SLAB_BITS;
@@ -221,19 +219,16 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	for (int i = 0; i < 8; ++i)
 		lrc[warp_id_in_block][i] = -1;
 	//TODO remove this loop maybe
-	Address allocated_address = EMPTY_ADDRESS;
-	const int max_allowed_superblock_changes = 2;
-	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
-	int allocator_thread_no = -1;
 	int memoryblock_changes = 0;
 	for(/*int local_rbl_changes = 0*/*x = 0; /*local_rbl_changes*/*x <= max_local_rbl_changes; ++(*x) /*++local_rbl_changes*/) {		//review the loop termination condition
-		int slab_no;
+		int slab_no, allocator_thread_no;
 		auto local_rbl_changes = *x;
 		while (true) {		//Review this loop
 			slab_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, resident_bitmap_line);
 			allocator_thread_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
 			if (allocator_thread_no == -1) { // All memory units are full in the memory block
+				const int max_allowed_memoryblock_changes = 2 /*max_allowed_superblock_changes*/ * max_resident_changes;
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
 					slab_alloc->status = 1;
 					__threadfence();
@@ -243,7 +238,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 				}
 				__syncwarp();
 				//if (__laneID == 0)
-					//printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", __global_warp_id, *x, memoryblock_changes);
+				//printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", __global_warp_id, *x, memoryblock_changes);
 				set();
 				++memoryblock_changes;
 			}
@@ -251,7 +246,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 				break;
 			}
 		}
-
+		
+		Address allocated_address = EMPTY_ADDRESS;
 		if (__laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;
 			auto global_memory_block_no = starting_addr >> SLAB_BITS;
@@ -287,7 +283,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	assert(mahakhela);
 	asm("trap;");*/
 	__syncwarp();
-	if (__laneID == allocator_thread_no) {
+	if (__laneID == 0) {
 		printf("warp_allocate() failed for Warp ID=%d. Details of each iteration:\n", __global_warp_id);
 		for (int i = 0; i < 8; ++i) {
 			if (lrc[warp_id_in_block][i] != -1)
