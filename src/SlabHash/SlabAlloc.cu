@@ -136,13 +136,12 @@ __device__ void ResidentBlock::set() {
 		#endif // !NDEBUG
 		// resident_changes = -1;	// So it becomes 0 after a memory block is found
 	}
-	int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
-	//unsigned memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
+	//unsigned memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
 	uint32_t total_memory_blocks = slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks;
-	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(global_warp_id, resident_changes, total_memory_blocks);
+	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes, total_memory_blocks);
 #ifndef NDEBUG
 	//if (__laneID == 0 && resident_changes != -1)		//DEBUG
-//		printf("\tset()->super_memory_block_no=hash(global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", global_warp_id, resident_changes, total_memory_blocks, super_memory_block_no);
+//		printf("\tset()->super_memory_block_no=hash(__global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", __global_warp_id, resident_changes, total_memory_blocks, super_memory_block_no);
 #endif // !NDEBUG
 
 	starting_addr = super_memory_block_no << SLAB_BITS;
@@ -154,7 +153,6 @@ __device__ void ResidentBlock::set() {
 __device__ Address ResidentBlock::warp_allocate() {
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
-	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 	const int max_allowed_superblock_changes = 2;
 	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
@@ -163,8 +161,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 	for (int local_rbl_changes = 0; local_rbl_changes <= max_local_rbl_changes; ++local_rbl_changes) {		//review the loop termination condition
 		int slab_no;
 		while (true) {		//Review this loop
-			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
-			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
+			slab_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, resident_bitmap_line);
+			allocator_thread_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
 			if (allocator_thread_no == -1) { // All memory units are full in the memory block
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
 					slab_alloc->status = 1;
@@ -224,7 +222,6 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 		lrc[warp_id_in_block][i] = -1;
 	//TODO remove this loop maybe
 	Address allocated_address = EMPTY_ADDRESS;
-	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x/warpSize);
 	const int max_allowed_superblock_changes = 2;
 	const int max_allowed_memoryblock_changes = max_allowed_superblock_changes * max_resident_changes;
 	const int max_local_rbl_changes = max_resident_changes;
@@ -234,8 +231,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 		int slab_no;
 		auto local_rbl_changes = *x;
 		while (true) {		//Review this loop
-			slab_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, resident_bitmap_line);
-			allocator_thread_no = HashFunction::unsetbit_index(global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
+			slab_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, resident_bitmap_line);
+			allocator_thread_no = HashFunction::unsetbit_index(__global_warp_id, local_rbl_changes, ~__ballot_sync(WARP_MASK, slab_no + 1));
 			if (allocator_thread_no == -1) { // All memory units are full in the memory block
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
 					slab_alloc->status = 1;
@@ -246,7 +243,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 				}
 				__syncwarp();
 				//if (__laneID == 0)
-					//printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", global_warp_id, *x, memoryblock_changes);
+					//printf("Warp ID=%d, local_rbl_changes=%d, memoryblock_changes=%d, called set()\n", __global_warp_id, *x, memoryblock_changes);
 				set();
 				++memoryblock_changes;
 			}
@@ -291,10 +288,10 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 	asm("trap;");*/
 	__syncwarp();
 	if (__laneID == allocator_thread_no) {
-		printf("warp_allocate() failed for Warp ID=%d. Details of each iteration:\n", global_warp_id);
+		printf("warp_allocate() failed for Warp ID=%d. Details of each iteration:\n", __global_warp_id);
 		for (int i = 0; i < 8; ++i) {
 			if (lrc[warp_id_in_block][i] != -1)
-				printf("-> Warp ID=%d, local_rbl_changes=%d, oldval=%x, slab_no=%d, allocator_thread_no=%d\n", global_warp_id, lrc[warp_id_in_block][i], ov[warp_id_in_block][i], sn[warp_id_in_block][i], atn[warp_id_in_block][i]);
+				printf("-> Warp ID=%d, local_rbl_changes=%d, oldval=%x, slab_no=%d, allocator_thread_no=%d\n", __global_warp_id, lrc[warp_id_in_block][i], ov[warp_id_in_block][i], sn[warp_id_in_block][i], atn[warp_id_in_block][i]);
 		}
 		printf("-------------------------------------------------------------------------------------------------------\n");
 	}

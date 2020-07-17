@@ -10,12 +10,13 @@
 #define MEMORYBLOCK_BITS 8
 #define SUPERBLOCK_BITS 14
 
+#define CEILDIV(a, b) ((a/b) + (a % b != 0))
+
 #ifdef __CUDACC__
 #define __laneID (threadIdx.x % warpSize)
+#define __global_warp_id (CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize))
 #endif // __CUDACC__
 
-
-#define CEILDIV(a, b) ((a/b) + (a % b != 0))
 
 /*
  * Address is a representation of 64 bit addresses in 32 bits

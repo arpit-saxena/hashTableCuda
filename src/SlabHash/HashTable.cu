@@ -13,7 +13,7 @@ __host__ HashTable::HashTable(int size, SlabAlloc * s) {
 
 __global__ void utilitykernel::init_table(int no_of_buckets, SlabAlloc * slab_alloc, Address * base_slabs) {
 	ResidentBlock rb(slab_alloc);
-	int warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);;
+	int warp_id = __global_warp_id;
 	while (warp_id < no_of_buckets) {
 		base_slabs[warp_id] = rb.warp_allocate();
 		warp_id += gridDim.x;
@@ -181,9 +181,8 @@ __host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (
 __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
 												SlabAlloc* slab_alloc, unsigned no_of_buckets,
 												void (*callback)(uint32_t key, uint32_t value)) {
-	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
-	if(global_warp_id < no_of_keys) {
-		const uint32_t src_key = d_keys[global_warp_id];
+	if(__global_warp_id < no_of_keys) {
+		const uint32_t src_key = d_keys[__global_warp_id];
 		const unsigned src_bucket = HashFunction::hash(src_key, no_of_buckets);
 		Address next = base_slabs[src_bucket];
 		while(next != EMPTY_ADDRESS) {
