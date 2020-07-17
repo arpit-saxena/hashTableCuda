@@ -51,7 +51,6 @@ __device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable *
 	resident_block = rb;
 	instr = ins;
 	this->is_active = is_active;
-	laneID = threadIdx.x % warpSize;
 }
 
 __device__ void HashTableOperation::run() {
@@ -68,7 +67,7 @@ __device__ void HashTableOperation::run() {
 			unsigned src_bucket = HashFunction::hash(src_key, hashtable->no_of_buckets);
 			next = hashtable->base_slabs[src_bucket];
 		}
-		read_data = ReadSlab(next, laneID);
+		read_data = ReadSlab(next, __laneID);
 		switch(src_instrtype) {
 			case Instruction::Insert:
 				inserter();
@@ -90,7 +89,7 @@ __device__ void HashTableOperation::searcher() {
 	if(found_lane != 0) {
 		--found_lane;
 		uint32_t found_value = __shfl_sync(WARP_MASK, read_data, found_lane+1);
-		if(laneID == src_lane) {
+		if(__laneID == src_lane) {
 			instr->value = found_value;
 			is_active = false;
 		}
@@ -98,7 +97,7 @@ __device__ void HashTableOperation::searcher() {
 	else{
 		auto next_ptr = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		if(next_ptr == EMPTY_ADDRESS) {
-			if(laneID == src_lane) {
+			if(__laneID == src_lane) {
 				instr->value = SEARCH_NOT_FOUND;
 				is_active = false;
 			}
@@ -114,7 +113,7 @@ __device__ void HashTableOperation::inserter() {
 	if(dest_lane != 0){
 		--dest_lane;
 		auto empty_pair = makepair(EMPTY_KEY, EMPTY_VALUE);
-		if(laneID == src_lane) {
+		if(__laneID == src_lane) {
 			auto old_pair = atomicCAS((ULL *)SlabAddress(next, dest_lane), empty_pair, makepair(src_key, src_value));
 			if(old_pair == empty_pair) {
 				is_active = false;
@@ -125,8 +124,8 @@ __device__ void HashTableOperation::inserter() {
 		auto next_ptr = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		if(next_ptr == EMPTY_ADDRESS) {
 			auto new_slab_ptr = resident_block->warp_allocate();
-			if(laneID == ADDRESS_LANE) {
-				auto oldptr = atomicCAS(SlabAddress(next, laneID), EMPTY_ADDRESS, new_slab_ptr);
+			if(__laneID == ADDRESS_LANE) {
+				auto oldptr = atomicCAS(SlabAddress(next, __laneID), EMPTY_ADDRESS, new_slab_ptr);
 				if(oldptr != EMPTY_ADDRESS) {
 					hashtable->slab_alloc->deallocate(new_slab_ptr);
 					new_slab_ptr = oldptr;
@@ -147,7 +146,7 @@ __device__ void HashTableOperation::deleter() {
 	if(found_lane != 0) {
 		--found_lane;
 		auto existing_pair = makepair(src_key, src_value);
-		if(laneID == src_lane) {
+		if(__laneID == src_lane) {
 			auto old_pair = atomicCAS((ULL *)SlabAddress(next, found_lane)
 										, existing_pair, makepair(EMPTY_KEY, EMPTY_VALUE));
 			if(old_pair == existing_pair) {
@@ -158,7 +157,7 @@ __device__ void HashTableOperation::deleter() {
 	else {
 		auto next_ptr = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 		if(next_ptr == EMPTY_ADDRESS) {
-			if(laneID == src_lane) {
+			if(__laneID == src_lane) {
 				is_active = false;
 			}
 		}
@@ -184,15 +183,14 @@ __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of
 												void (*callback)(uint32_t key, uint32_t value)) {
 	const int global_warp_id = CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 	if(global_warp_id < no_of_keys) {
-		const int laneID = threadIdx.x % warpSize;
 		const uint32_t src_key = d_keys[global_warp_id];
 		const unsigned src_bucket = HashFunction::hash(src_key, no_of_buckets);
 		Address next = base_slabs[src_bucket];
 		while(next != EMPTY_ADDRESS) {
-			uint32_t read_data = slab_alloc->ReadSlab(next, laneID);
+			uint32_t read_data = slab_alloc->ReadSlab(next, __laneID);
 			uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
 			uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == src_key);
-			if(found_key_lanes & 1 << laneID ) {
+			if(found_key_lanes & 1 << __laneID ) {
 				callback(read_data, next_lane_data);
 			}
 			__syncwarp();

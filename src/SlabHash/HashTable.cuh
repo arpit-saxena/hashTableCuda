@@ -47,7 +47,6 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	HashTable* hashtable;
 	ResidentBlock* resident_block;
 	Instruction * instr;
-	int laneID;
 
 	bool is_active;
 	uint32_t src_key, src_value, read_data;

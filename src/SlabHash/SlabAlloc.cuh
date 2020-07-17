@@ -10,6 +10,11 @@
 #define MEMORYBLOCK_BITS 8
 #define SUPERBLOCK_BITS 14
 
+#ifdef __CUDACC__
+#define __laneID (threadIdx.x % warpSize)
+#endif // __CUDACC__
+
+
 #define CEILDIV(a, b) ((a/b) + (a % b != 0))
 
 /*
