@@ -162,11 +162,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 			if (allocator_thread_no == -1) { // All memory units are full in the memory block
 				const int max_allowed_memoryblock_changes = 2 /*max_allowed_superblock_changes*/ * max_resident_changes;
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
-					slab_alloc->status = 1;
-					__threadfence();
 					int khela = 0;
 					assert(khela);
-					asm("trap;"); // Kills kernel with error
 				}
 				set();
 				++memoryblock_changes;
@@ -175,7 +172,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 				break;
 			}
 		}
-		
+
 		Address allocated_address = EMPTY_ADDRESS;
 		if (__laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;
@@ -199,11 +196,8 @@ __device__ Address ResidentBlock::warp_allocate() {
 	}
 	//This means all max_local_rbl_changes attempts to allocate memory failed as the atomicCAS call kept failing
 	//Terminate
-	slab_alloc->status = 2;
-	__threadfence();
 	int mahakhela = 0;
 	assert(mahakhela);
-	asm("trap;");
 
 	return EMPTY_ADDRESS; // Will never execute
 }
@@ -230,11 +224,8 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 			if (allocator_thread_no == -1) { // All memory units are full in the memory block
 				const int max_allowed_memoryblock_changes = 2 /*max_allowed_superblock_changes*/ * max_resident_changes;
 				if (memoryblock_changes > max_allowed_memoryblock_changes) {
-					slab_alloc->status = 1;
-					__threadfence();
 					int khela = 0;
 					assert(khela);
-					asm("trap;"); // Kills kernel with error
 				}
 				__syncwarp();
 				//if (__laneID == 0)
@@ -246,7 +237,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 				break;
 			}
 		}
-		
+
 		Address allocated_address = EMPTY_ADDRESS;
 		if (__laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;

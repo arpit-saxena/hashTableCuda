@@ -42,11 +42,8 @@ __device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable *
 	if(rb->slab_alloc != h->slab_alloc) {
 		//TODO: Better way to handle this?
 		printf("Block:%d,Thread:%d->The resident block and the hashtable passed must have the same SlabAlloc object!\n", blockIdx.x, threadIdx.x);
-		rb->slab_alloc->status = 3;
-		__threadfence();
 		int SlabAllocsnotconsistent = 0;
 		assert(SlabAllocsnotconsistent);
-		asm("trap;");
 	}
 	resident_block = rb;
 	instr = ins;

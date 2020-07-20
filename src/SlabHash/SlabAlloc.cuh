@@ -66,9 +66,6 @@ class SlabAlloc {		//A single object of this will reside in global memory
 	public:
 		static const int maxSuperBlocks = (1 << SUPERBLOCK_BITS) - 1;	// The last superblock will not be allocated, this 
 														// ensures EMPTY_ADDRESS is an invalid address
-		int status = 0;	// Indicates the return code of kernels of allocation code
-						// If a function encounters an error, it sets this to non zero
-						// See https://stackoverflow.com/questions/12521721/crashing-a-kernel-gracefully
 		__device__ static Address makeAddress
 			(uint32_t superBlock_idx, uint32_t memoryBlock_idx, uint32_t slab_idx);
 	private:
