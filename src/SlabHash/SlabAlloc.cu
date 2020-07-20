@@ -137,16 +137,16 @@ __device__ void ResidentBlock::set() {
 		// resident_changes = -1;	// So it becomes 0 after a memory block is found
 	}
 	//unsigned memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
-	uint32_t total_memory_blocks = slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks;
-	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes, total_memory_blocks);
+	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes,
+						slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks/*total_memory_blocks*/);
 #ifndef NDEBUG
 	//if (__laneID == 0 && resident_changes != -1)		//DEBUG
-//		printf("\tset()->super_memory_block_no=hash(__global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", __global_warp_id, resident_changes, total_memory_blocks, super_memory_block_no);
+//		printf("\tset()->super_memory_block_no=hash(__global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", __global_warp_id, resident_changes, slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks, super_memory_block_no);
 #endif // !NDEBUG
 
 	starting_addr = super_memory_block_no << SLAB_BITS;
 	++resident_changes;
-	BlockBitMap * resident_bitmap = slab_alloc->bitmaps + (starting_addr>>SLAB_BITS);
+	BlockBitMap * resident_bitmap = slab_alloc->bitmaps + super_memory_block_no;
 	resident_bitmap_line = resident_bitmap->bitmap[__laneID];
 }
 
