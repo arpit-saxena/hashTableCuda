@@ -66,16 +66,10 @@ Address SlabAlloc::makeAddress(uint32_t superBlock_idx, uint32_t memoryBlock_idx
 }
 
 // Currently called with full warp only, so it also assumes full warp
-__device__ int SlabAlloc::allocateSuperBlock() {
+__device__ void SlabAlloc::allocateSuperBlock() {
 	assert(__activemask() == WARP_MASK);
-	const int workerThreadIdx = 0;
-	int localIdx = -1;
-	if (__laneID == workerThreadIdx) {
-		int numSuper = numSuperBlocks; // Get a local copy of the variable
-		if (numSuper == maxSuperBlocks) {
-			localIdx = numSuper - 1; // This is the last super block, deal with it
-		} else {
-			localIdx = numSuper++;
+	if (__laneID == 0) {
+		if (numSuperBlocks < maxSuperBlocks) {
 			SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
 			if (newSuperBlock == nullptr) {
 				/*this->status = 3;
@@ -83,9 +77,9 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 				printf("Finally, %d superblocks\n", numSuperBlocks);
 				assert(OutOfMemory);
 				asm("trap;");*/
-				return localIdx - 1;
+				return;
 			}
-			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (superBlocks + localIdx), (ULL) nullptr, (ULL) newSuperBlock);
+			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (superBlocks + numSuperBlocks), (ULL) nullptr, (ULL) newSuperBlock);
 			if (oldSuperBlock != nullptr) {
 				free(newSuperBlock);
 			} else {
@@ -93,9 +87,6 @@ __device__ int SlabAlloc::allocateSuperBlock() {
 			}
 		}
 	}
-
-	__syncwarp();
-	return __shfl_sync(WARP_MASK, localIdx, workerThreadIdx);
 }
 
 __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){

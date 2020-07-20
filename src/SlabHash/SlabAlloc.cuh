@@ -77,7 +77,7 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		__host__ SlabAlloc(int numSuperBlocks);
 		__host__ ~SlabAlloc();
 		BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
-		__device__ int allocateSuperBlock();	// Returns new super block's index
+		__device__ void allocateSuperBlock();
 		__device__ __host__ int getNumSuperBlocks();
 		__device__ uint32_t * SlabAddress(Address, uint32_t);
 		__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
