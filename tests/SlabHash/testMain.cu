@@ -263,6 +263,21 @@ void test4() {
 	gpuErrchk(cudaFree(d_s));
 }
 
+__global__ void somekernel(SlabAlloc * s) {
+	s->allocateSuperBlock();
+}
+
+void unittest() {
+	SlabAlloc * s = new SlabAlloc(1);
+	SlabAlloc * d_s;
+	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
+	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
+	somekernel<<<1<<8, 1024>>>(d_s);
+
+	gpuErrchk(cudaFree(d_s));
+	delete s;
+}
+
 int main() {
 	test3();
 	gpuErrchk(cudaDeviceReset());
