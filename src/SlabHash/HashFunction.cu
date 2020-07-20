@@ -26,22 +26,26 @@ uint32_t HashFunction::hash(uint32_t value, uint32_t wrap) {
 }
 
 __device__
-int HashFunction::unsetbit_index(uint32_t global_warp_id, uint32_t resident_changes, uint32_t value){
-	uint32_t flipped_value = __brev(~value);
-	int num_unset = __popc(flipped_value);
-	if (num_unset == 0) return -1;
-	int bit_number = memoryblock_hash(global_warp_id, resident_changes, num_unset);
-	int index = 0;
+/*
+* Here, the argument bit_number is actually global_warp_id, and index is actually resident_changes
+* These names were chosen to improve readability of this function's implementation
+* as this function is optimized to reuse registers occupied by the function arguments
+*/
+int HashFunction::unsetbit_index(uint32_t bit_number, uint32_t index, uint32_t value){
+	value = __brev(~value);
+	if (__popc(value) == 0) return -1;
+	bit_number = memoryblock_hash(bit_number, index, __popc(value));
+	index = 0;
 	// TODO: This logic is a bit unclear, can try to make it clearer
 	while (true) {
-		int numZerosInitially = __clz(flipped_value);
+		int numZerosInitially = __clz(value);
 		index += numZerosInitially;
 		if (bit_number == 0) break;
-		flipped_value <<= numZerosInitially + 1;
+		value <<= numZerosInitially + 1;
 		index++;
 		bit_number--;
 	}
 	//Test
-	assert ((~value >> index) & 1);
+	//assert ((~value >> index) & 1);
 	return index;
 }
