@@ -13,19 +13,18 @@
 typedef unsigned long long ULL;
 
 namespace utilitykernel {
-	__global__ void init_table(int, SlabAlloc *, Address *);
+	__global__ void init_table(int, Address *);
 	__global__ void findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, 
-		Address* base_slabs, SlabAlloc* slab_alloc, unsigned no_of_buckets,
+		Address* base_slabs, unsigned no_of_buckets,
 		void (*callback)(uint32_t key, uint32_t value));
 }
 
 class HashTable {		// a single object of this will be made on host, and copied to global device memory
 		Address * base_slabs;
-		SlabAlloc * slab_alloc;
-		unsigned no_of_buckets;
+		const unsigned no_of_buckets;
 	public:
 		// Needs to be called with the SlabAlloc pointer pointing to an object placed in device memory
-		__host__ HashTable(int size, SlabAlloc * s);
+		__host__ HashTable(int size);
 		__host__ ~HashTable();
 		__host__ void findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value));
 
@@ -44,7 +43,7 @@ struct Instruction {
 };
 
 class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
-	HashTable* hashtable;
+	const HashTable* const hashtable;
 	ResidentBlock* resident_block;
 	Instruction * instr;
 

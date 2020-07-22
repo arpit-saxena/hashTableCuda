@@ -84,6 +84,13 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		__device__ void deallocate(Address);
 };
 
+namespace allocator {
+	extern __constant__ SlabAlloc * slab_alloc;
+	extern SlabAlloc * h_slab_alloc;
+	__host__ void init(int numSuperBlocks);
+	__host__ void destroy();
+}
+
 class ResidentBlock {			//Objects of this will be on thread-local memory
 		Address starting_addr;		//address of the 1st memory unit of the resident block
 
@@ -91,10 +98,9 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 		int resident_changes;
 
 	public:
-		SlabAlloc * const slab_alloc;
 		static const int max_resident_changes = 1024;
 
-		__device__ ResidentBlock(SlabAlloc *);
+		__device__ ResidentBlock();
 		__device__ void set();		//Chooses a new memory block as a resident block
 #ifndef NDEBUG
 		__device__ Address warp_allocate(int*);
