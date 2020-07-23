@@ -17,14 +17,14 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 		return;
 	}
 
-	cudaMalloc(&superBlocks, maxSuperBlocks*sizeof(SuperBlock *));
+	gpuErrchk(cudaMalloc(&superBlocks, maxSuperBlocks*sizeof(SuperBlock *)));
 
 	for (int i = 0; i < maxSuperBlocks; i++) {
 		SuperBlock * temp = nullptr;
 		if(i < numSuperBlocks) {
-			cudaMalloc(&temp, sizeof(SuperBlock));
+			gpuErrchk(cudaMalloc(&temp, sizeof(SuperBlock)));
 		}
-		cudaMemcpy(superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault);
+		gpuErrchk(cudaMemcpy(superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault));
 	}
 }
 
@@ -36,12 +36,12 @@ __host__ SlabAlloc::~SlabAlloc() {
 	}
 
 	SuperBlock **  h_superBlocks = new SuperBlock *[initNumSuperBlocks];
-	cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault);
+	gpuErrchk(cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault));
 	for (int i = 0; i < initNumSuperBlocks; i++) {
-		if(h_superBlocks[i])	cudaFree(h_superBlocks[i]);
+		if(h_superBlocks[i])	gpuErrchk(cudaFree(h_superBlocks[i]));
 	}
 	delete h_superBlocks;
-	cudaFree(superBlocks);
+	gpuErrchk(cudaFree(superBlocks));
 }
 
 __global__

@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 __host__ HashTable::HashTable(int size) : no_of_buckets(size) {
-	cudaMalloc(&base_slabs, no_of_buckets*sizeof(Address));
+	gpuErrchk(cudaMalloc(&base_slabs, no_of_buckets*sizeof(Address)));
 	int threads_per_block = 64 /* warp size*2 */ , blocks = no_of_buckets/(threads_per_block/32);
 	utilitykernel::init_table<<<blocks, threads_per_block>>>(no_of_buckets, base_slabs);
 }
@@ -19,7 +19,7 @@ __global__ void utilitykernel::init_table(int no_of_buckets, Address * base_slab
 }
 
 __host__ HashTable::~HashTable() {
-	cudaFree(base_slabs);
+	gpuErrchk(cudaFree(base_slabs));
 }
 
 __device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
@@ -166,8 +166,8 @@ __device__ void HashTableOperation::deleter(uint32_t s_read_data[], uint32_t &sr
 __host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value)) {
 	unsigned no_of_threads = no_of_keys * 32;
 	uint32_t * d_keys;
-	cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t));
-	cudaMemcpy(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault);
+	gpuErrchk(cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t)));
+	gpuErrchk(cudaMemcpy(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault));
 	int threads_per_block = 64, blocks = CEILDIV(no_of_threads, threads_per_block);
 	utilitykernel::findvalueskernel<<<blocks, threads_per_block>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback);
 }

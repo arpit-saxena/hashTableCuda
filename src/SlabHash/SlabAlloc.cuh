@@ -2,6 +2,7 @@
 #define SLABALLOC_H
 
 #include <cstdint>
+#include "errorcheck.h"
 
 #define WARP_MASK (uint32_t)(0xFFFFFFFF)
 #define EMPTY_ADDRESS (Address)WARP_MASK
