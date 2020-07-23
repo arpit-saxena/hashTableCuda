@@ -14,7 +14,8 @@
 
 #ifdef __CUDACC__
 #define __laneID (threadIdx.x % warpSize)
-#define __global_warp_id (CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize))
+#define __local_warp_id (threadIdx.x / warpSize)
+#define __global_warp_id (CEILDIV(blockDim.x, warpSize) * blockIdx.x + __local_warp_id)
 #endif // __CUDACC__
 
 
