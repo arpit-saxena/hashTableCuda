@@ -17,14 +17,15 @@ __host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSupe
 		return;
 	}
 
-	gpuErrchk(cudaMalloc(&superBlocks, maxSuperBlocks*sizeof(SuperBlock *)));
+	gpuErrchk(cudaMalloc(&allocator::h_superBlocks, maxSuperBlocks*sizeof(SuperBlock *)));
+	gpuErrchk(cudaMemcpyToSymbol(allocator::superBlocks, &allocator::h_superBlocks, sizeof(SuperBlock **)));
 
 	for (int i = 0; i < maxSuperBlocks; i++) {
 		SuperBlock * temp = nullptr;
 		if(i < numSuperBlocks) {
 			gpuErrchk(cudaMalloc(&temp, sizeof(SuperBlock)));
 		}
-		gpuErrchk(cudaMemcpy(superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault));
+		gpuErrchk(cudaMemcpy(allocator::h_superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault));
 	}
 }
 
@@ -32,16 +33,16 @@ __host__ SlabAlloc::~SlabAlloc() {
 	int size = maxSuperBlocks - initNumSuperBlocks;
 	if (size != 0) {
 		int threadsPerBlock = 64, numBlocks = CEILDIV(size, threadsPerBlock);
-		utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(superBlocks + initNumSuperBlocks, size);
+		utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(allocator::h_superBlocks + initNumSuperBlocks, size);
 	}
 
 	SuperBlock **  h_superBlocks = new SuperBlock *[initNumSuperBlocks];
-	gpuErrchk(cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault));
+	gpuErrchk(cudaMemcpy(h_superBlocks, allocator::h_superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault));
 	for (int i = 0; i < initNumSuperBlocks; i++) {
 		if(h_superBlocks[i])	gpuErrchk(cudaFree(h_superBlocks[i]));
 	}
 	delete h_superBlocks;
-	gpuErrchk(cudaFree(superBlocks));
+	gpuErrchk(cudaFree(allocator::h_superBlocks));
 }
 
 __global__
@@ -55,7 +56,9 @@ void utilitykernel::clean_superblocks(SuperBlock ** superBlocks, const ULL size)
 }
 
 __constant__ SlabAlloc * allocator::slab_alloc = nullptr;
+__constant__ SuperBlock ** allocator::superBlocks = nullptr;
 SlabAlloc * allocator::h_slab_alloc = nullptr;
+SuperBlock** allocator::h_superBlocks = nullptr;
 
 __host__ void allocator::init(int numSuperBlocks) {
 	h_slab_alloc = new SlabAlloc(numSuperBlocks);
@@ -66,7 +69,9 @@ __host__ void allocator::init(int numSuperBlocks) {
 }
 
 __host__ void allocator::destroy() {
-	gpuErrchk(cudaFree(slab_alloc));
+	SlabAlloc* d_slab_alloc;
+	gpuErrchk(cudaMemcpyFromSymbol(&d_slab_alloc, slab_alloc, sizeof(SlabAlloc *)));
+	gpuErrchk(cudaFree(d_slab_alloc));
 	delete h_slab_alloc;
 }
 
@@ -96,7 +101,7 @@ __device__ void SlabAlloc::allocateSuperBlock() {
 				asm("trap;");*/
 				return;
 			}
-			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (superBlocks + numSuperBlocks), (ULL) nullptr, (ULL) newSuperBlock);
+			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (allocator::superBlocks + numSuperBlocks), (ULL) nullptr, (ULL) newSuperBlock);
 			if (oldSuperBlock != nullptr) {
 				free(newSuperBlock);
 			} else {
@@ -110,7 +115,7 @@ __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
 	uint32_t slab_idx = addr & ((1 << SLAB_BITS) - 1);
 	uint32_t block_idx = (addr >> SLAB_BITS) & ((1 << MEMORYBLOCK_BITS) - 1);
 	uint32_t superBlock_idx = (addr >> (SLAB_BITS + MEMORYBLOCK_BITS));
-	return (superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
+	return (allocator::superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
 }
 
 __device__ uint32_t SlabAlloc::ReadSlab(Address slab_addr, int laneID) {

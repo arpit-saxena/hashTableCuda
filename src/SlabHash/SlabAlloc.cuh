@@ -73,7 +73,7 @@ class SlabAlloc {		//A single object of this will reside in global memory
 	private:
 		int numSuperBlocks;
 		const int initNumSuperBlocks;
-		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
+//		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
 
 	public:
 		__host__ SlabAlloc(int numSuperBlocks);
@@ -88,7 +88,9 @@ class SlabAlloc {		//A single object of this will reside in global memory
 
 namespace allocator {
 	extern __constant__ SlabAlloc * slab_alloc;
+	extern __constant__ SuperBlock ** superBlocks;
 	extern SlabAlloc * h_slab_alloc;
+	extern SuperBlock ** h_superBlocks;
 	__host__ void init(int numSuperBlocks);
 	__host__ void destroy();
 }
