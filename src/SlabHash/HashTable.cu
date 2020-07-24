@@ -35,10 +35,8 @@ __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int lan
 	return allocator::slab_alloc->SlabAddress(slab_addr, laneID);
 }
 
-__device__ HashTableOperation::HashTableOperation(Instruction * ins, HashTable * h, ResidentBlock * rb) : hashtable(h) {
-	resident_block = rb;
-	instr = ins;
-}
+__device__ HashTableOperation::HashTableOperation(Instruction * const __restrict__ ins, const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb)
+ : hashtable(h), resident_block(rb), instr(ins) {}
 
 __device__ void HashTableOperation::run(bool is_active) {
 	static const int warp_size = 32;
