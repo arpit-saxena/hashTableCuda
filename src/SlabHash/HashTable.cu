@@ -5,7 +5,7 @@
 
 __host__ HashTable::HashTable(int size) : no_of_buckets(size) {
 	gpuErrchk(cudaMalloc(&base_slabs, no_of_buckets*sizeof(Address)));
-	int threads_per_block = 64 /* warp size*2 */ , blocks = no_of_buckets/(threads_per_block/32);
+	int threads_per_block = THREADS_PER_BLOCK /* warp size*2 */ , blocks = no_of_buckets/(threads_per_block/32);
 	utilitykernel::init_table<<<blocks, threads_per_block>>>(no_of_buckets, base_slabs);
 }
 
@@ -166,7 +166,7 @@ __host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (
 	uint32_t * d_keys;
 	gpuErrchk(cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t)));
 	gpuErrchk(cudaMemcpy(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault));
-	int threads_per_block = 64, blocks = CEILDIV(no_of_threads, threads_per_block);
+	int threads_per_block = THREADS_PER_BLOCK, blocks = CEILDIV(no_of_threads, threads_per_block);
 	utilitykernel::findvalueskernel<<<blocks, threads_per_block>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback);
 }
 

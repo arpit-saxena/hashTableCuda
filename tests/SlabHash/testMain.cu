@@ -194,7 +194,7 @@ void test3() {
 	gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
 	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
 
-	int numBlocks = numWarps>>1, threadsPerBlock = 64;
+	int numBlocks = numWarps>>1, threadsPerBlock = THREADS_PER_BLOCK;
 	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h);
 	//kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
 	findvaluescheck(h, numBlocks*threadsPerBlock, threadsPerBlock);
