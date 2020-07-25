@@ -36,8 +36,7 @@ class HashTable {		// a single object of this will be made on host, and copied t
 struct Instruction {
 	enum Type {
 		Insert,
-		Delete,
-		Search
+		Delete
 	};
 	
 	Type type;
@@ -47,18 +46,17 @@ struct Instruction {
 class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
 	const HashTable* __restrict__ const hashtable;
 	ResidentBlock* const __restrict__ resident_block;
-	Instruction * const __restrict__ instr;
 
 	__device__ static ULL makepair(uint32_t key, uint32_t value);
 	__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
 	__device__ uint32_t * SlabAddress(Address slab_addr, int laneID);
 
 	__device__ void inserter(uint32_t s_read_data[], uint32_t &src_key, uint32_t &src_value, int &src_lane, uint32_t &work_queue, Address &next);
-	__device__ void searcher(uint32_t s_read_data[], uint32_t &src_key, int &src_lane, uint32_t &work_queue, Address &next);
+	//__device__ void searcher(uint32_t s_read_data[], uint32_t &src_key, int &src_lane, uint32_t &work_queue, Address &next);
 	__device__ void deleter(uint32_t s_read_data[], uint32_t &src_key, uint32_t &src_value, int &src_lane, uint32_t &work_queue, Address &next);
 public:
-	__device__ HashTableOperation(Instruction * const __restrict__ ins, const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb);
-	__device__ void run(bool is_active = true);
+	__device__ HashTableOperation(const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb);
+	__device__ void run(const Instruction::Type type, const uint32_t key, uint32_t value, bool is_active = true);
 };
 
 #endif /* HASHTABLE_H */
