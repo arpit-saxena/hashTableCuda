@@ -25,7 +25,7 @@ FILE(GLOB_RECURSE TEST_SOURCES
 	tests/SlabHash/*.cuh
 	tests/SlabHash/*.h)
 
-set(CMAKE_CUDA_FLAGS "-G -g")
+set(CMAKE_CUDA_FLAGS "-O3")
 add_executable(test_slab ${TEST_SOURCES} ${SLABHASH_SOURCES})
 #target_link_libraries(test_slab ${CONAN_LIBS})  
 set_target_properties(test_slab PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

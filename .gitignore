@@ -34,3 +34,6 @@ out/
 
 # Eclipse crap
 /.settings/
+
+# VSCode stuff
+.vscode

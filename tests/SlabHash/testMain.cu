@@ -168,14 +168,15 @@ __device__ void callBack(uint32_t key, uint32_t value) {
 }
 __device__ void (*d_callBack)(uint32_t, uint32_t) = callBack;
 void findvaluescheck(HashTable * h, int numBlocks, int threadsPerBlock) {
-	uint32_t * keys = new uint32_t[numBlocks];
+	uint32_t * keys;
+	cudaMallocHost(&keys, sizeof(uint32_t) * numBlocks);
 	for(int i = 0; i < numBlocks; ++i) {
 		keys[i] = i;
 	}
 	void* h_callBack;
 	gpuErrchk(cudaMemcpyFromSymbol(&h_callBack, d_callBack, sizeof(&callBack)));
 	h->findvalues(keys, numBlocks, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack));
-	delete[]keys;
+	cudaFreeHost(keys);
 }
 
 __global__ void kernel3del(HashTable* h, SlabAlloc* s) {
@@ -221,7 +222,7 @@ void test3() {
 	int numBlocks = numWarps>>1, threadsPerBlock = 64;
 	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 	kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
-	findvaluescheck(h, numBlocks, threadsPerBlock);
+	findvaluescheck(h, numBlocks * threadsPerBlock, threadsPerBlock);
 	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 	kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
 

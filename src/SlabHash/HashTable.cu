@@ -168,7 +168,7 @@ __host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (
 	unsigned no_of_threads = no_of_keys * 32;
 	uint32_t * d_keys;
 	cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t));
-	cudaMemcpy(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault);
+	cudaMemcpyAsync(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault);
 	int threads_per_block = 64, blocks = CEILDIV(no_of_threads, threads_per_block);
 	utilitykernel::findvalueskernel<<<blocks, threads_per_block>>>(d_keys, no_of_keys, base_slabs, slab_alloc, no_of_buckets, callback);
 }

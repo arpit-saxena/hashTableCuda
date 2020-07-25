@@ -34,12 +34,13 @@ __host__ SlabAlloc::~SlabAlloc() {
 		utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(superBlocks + initNumSuperBlocks, size);
 	}
 
-	SuperBlock **  h_superBlocks = new SuperBlock *[initNumSuperBlocks];
-	cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault);
+	SuperBlock **  h_superBlocks;
+	cudaMallocHost(&h_superBlocks, initNumSuperBlocks * sizeof(SuperBlock *));
+	cudaMemcpy(h_superBlocks, superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault); // Making it async would cause problems
 	for (int i = 0; i < initNumSuperBlocks; i++) {
 		if(h_superBlocks[i])	cudaFree(h_superBlocks[i]);
 	}
-	delete h_superBlocks;
+	cudaFreeHost(h_superBlocks);
 	cudaFree(superBlocks);
 }
 
