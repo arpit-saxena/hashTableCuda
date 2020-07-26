@@ -106,7 +106,7 @@ __device__ void HashTableOperation::run(const Instruction::Type type, const uint
 	}
 }*/
 
-__device__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
+__device__ __forceinline__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
 	auto dest_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == EMPTY_KEY));
 	if(dest_lane != 0){
 		--dest_lane;
@@ -137,7 +137,7 @@ __device__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t sr
 	}
 }
 
-__device__ void HashTableOperation::deleter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
+__device__ __forceinline__ void HashTableOperation::deleter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
 	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == src_key && s_read_data[threadIdx.x + 1] == src_value));
 	if(__laneID == src_lane) {
 		if(found_lane != 0) {
