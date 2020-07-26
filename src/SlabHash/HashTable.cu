@@ -27,14 +27,6 @@ __device__ ULL HashTableOperation::makepair(uint32_t key, uint32_t value) {
 	return *reinterpret_cast<ULL *>(pair);
 }
 
-__device__ uint32_t HashTableOperation::ReadSlab(Address slab_addr, int laneID) {
-	return allocator::slab_alloc->ReadSlab(slab_addr, laneID);
-}
-
-__device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int laneID) {
-	return allocator::slab_alloc->SlabAddress(slab_addr, laneID);
-}
-
 __device__ HashTableOperation::HashTableOperation(const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb)
  : hashtable(h), resident_block(rb){}
 
@@ -69,7 +61,7 @@ __device__ void HashTableOperation::run(const Instruction::Type type, const uint
 			next = hashtable->base_slabs[src_bucket];
 			old_work_queue = work_queue;
 		}
-		s_read_data[threadIdx.x] = ReadSlab(next, __laneID);
+		s_read_data[threadIdx.x] = SlabAlloc::ReadSlab(next, __laneID);
 		switch(src_instrtype) {
 			case Instruction::Insert:
 				inserter(s_read_data, src_key, src_value, src_lane, work_queue, next);
@@ -112,7 +104,7 @@ __device__ __forceinline__ void HashTableOperation::inserter(uint32_t s_read_dat
 		--dest_lane;
 		if(__laneID == src_lane) {
 			auto empty_pair = makepair(EMPTY_KEY, EMPTY_VALUE);
-			auto old_pair = atomicCAS((ULL *)SlabAddress(next, dest_lane), empty_pair, makepair(src_key, src_value));
+			auto old_pair = atomicCAS((ULL *)SlabAlloc::SlabAddress(next, dest_lane), empty_pair, makepair(src_key, src_value));
 			if(old_pair == empty_pair) {
 				work_queue &= ~((uint32_t)(1<<__laneID));
 			}
@@ -123,9 +115,9 @@ __device__ __forceinline__ void HashTableOperation::inserter(uint32_t s_read_dat
 		if(next_ptr == EMPTY_ADDRESS) {
 			auto new_slab_ptr = resident_block->warp_allocate();
 			if(__laneID == ADDRESS_LANE) {
-				auto oldptr = atomicCAS(SlabAddress(next, __laneID), EMPTY_ADDRESS, new_slab_ptr);
+				auto oldptr = atomicCAS(SlabAlloc::SlabAddress(next, __laneID), EMPTY_ADDRESS, new_slab_ptr);
 				if(oldptr != EMPTY_ADDRESS) {
-					allocator::slab_alloc->deallocate(new_slab_ptr);
+					SlabAlloc::deallocate(new_slab_ptr);
 					new_slab_ptr = oldptr;
 				}
 				next = new_slab_ptr;
@@ -143,7 +135,7 @@ __device__ __forceinline__ void HashTableOperation::deleter(uint32_t s_read_data
 		if(found_lane != 0) {
 			--found_lane;
 			auto existing_pair = makepair(src_key, src_value);
-			auto old_pair = atomicCAS((ULL *)SlabAddress(next, found_lane)
+			auto old_pair = atomicCAS((ULL *)SlabAlloc::SlabAddress(next, found_lane)
 										, existing_pair, makepair(EMPTY_KEY, EMPTY_VALUE));
 			if(old_pair == existing_pair) {
 				work_queue &= ~((uint32_t)(1<<__laneID));
@@ -179,7 +171,7 @@ __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of
 		const unsigned src_bucket = HashFunction::hash(src_key, no_of_buckets);
 		Address next = base_slabs[src_bucket];
 		while(next != EMPTY_ADDRESS) {
-			uint32_t read_data = allocator::slab_alloc->ReadSlab(next, __laneID);
+			uint32_t read_data = SlabAlloc::ReadSlab(next, __laneID);
 			uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
 			uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == src_key);
 			if(found_key_lanes & 1 << __laneID ) {

@@ -36,7 +36,6 @@ typedef unsigned long long ULL;
  */
 struct BlockBitMap {
 	uint32_t bitmap[32];
-	BlockBitMap();
 };
 
 struct Slab {
@@ -53,47 +52,27 @@ struct SuperBlock {
 	MemoryBlock memoryBlocks[numMemoryBlocks];
 };
 
-namespace utilitykernel {
-	// Frees up the additional superblocks malloc'ed by allocateSuperBlock() in SlabAlloc
-	// Called in SlabAlloc::~SlabAlloc()
-	__global__ void clean_superblocks(SuperBlock **, const ULL);
-}
-
-// NOTE: Construct the object on host and copy it to the device afterwards to be able
-// to run functions. Also, make sure the argument 'numSuperBlocks' passed to the ctor
-// must be equal to the total no. of warps in the kernel that will be using this
-// object, to ensure no superblocks remain unallocated throughout the lifetime of
-// this object
-class SlabAlloc {		//A single object of this will reside in global memory
-	public:
+namespace SlabAlloc {
 		static const int maxSuperBlocks = (1 << SUPERBLOCK_BITS) - 1;	// The last superblock will not be allocated, this 
 														// ensures EMPTY_ADDRESS is an invalid address
-		__device__ static Address makeAddress
+		__device__ Address makeAddress
 			(uint32_t superBlock_idx, uint32_t memoryBlock_idx, uint32_t slab_idx);
-	private:
-		int numSuperBlocks;
-		const int initNumSuperBlocks;
-//		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
+	__device__ SuperBlock * getSuperBlockAddr(int index);
 
-	public:
-		__host__ SlabAlloc(int numSuperBlocks);
-		__host__ ~SlabAlloc();
-		BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
+	extern __device__ unsigned numSuperBlocks;
+	constexpr unsigned initNumSuperBlocks = 1;
+	extern __constant__ SuperBlock * initsuperBlocks[initNumSuperBlocks];
+	extern __device__ SuperBlock * dyn_allocated_superBlocks[maxSuperBlocks-initNumSuperBlocks];
+
+	__host__ void init();
+	__host__ void destroy();
+		extern __device__ BlockBitMap bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
 		__device__ void allocateSuperBlock();
-		__device__ __host__ int getNumSuperBlocks();
 		__device__ uint32_t * SlabAddress(Address, uint32_t);
 		__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
 		__device__ void deallocate(Address);
+		__global__ void clean_superblocks(const ULL);
 };
-
-namespace allocator {
-	extern __constant__ SlabAlloc * slab_alloc;
-	extern __constant__ SuperBlock ** superBlocks;
-	extern SlabAlloc * h_slab_alloc;
-	extern SuperBlock ** h_superBlocks;
-	__host__ void init(int numSuperBlocks);
-	__host__ void destroy();
-}
 
 class ResidentBlock {			//Objects of this will be on thread-local memory
 		Address starting_addr;		//address of the 1st memory unit of the resident block

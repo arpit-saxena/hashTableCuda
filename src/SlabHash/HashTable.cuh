@@ -25,7 +25,6 @@ class HashTable {		// a single object of this will be made on host, and copied t
 		Address * base_slabs;
 		const unsigned no_of_buckets;
 	public:
-		// Needs to be called with the SlabAlloc pointer pointing to an object placed in device memory
 		__host__ HashTable(int size);
 		__host__ ~HashTable();
 		__host__ void findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value));
@@ -48,8 +47,6 @@ class HashTableOperation {		// a single object of this will reside on thread-loc
 	ResidentBlock* const __restrict__ resident_block;
 
 	__device__ static ULL makepair(uint32_t key, uint32_t value);
-	__device__ uint32_t ReadSlab(Address slab_addr, int laneID);
-	__device__ uint32_t * SlabAddress(Address slab_addr, int laneID);
 
 	__device__ void inserter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next);
 	//__device__ void searcher(uint32_t s_read_data[], uint32_t src_key, int src_lane, uint32_t &work_queue, Address &next);
