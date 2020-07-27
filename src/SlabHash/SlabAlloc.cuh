@@ -2,6 +2,7 @@
 #define SLABALLOC_H
 
 #include <cstdint>
+#include "errorcheck.h"
 
 #define WARP_MASK (uint32_t)(0xFFFFFFFF)
 #define EMPTY_ADDRESS (Address)WARP_MASK
@@ -14,7 +15,8 @@
 
 #ifdef __CUDACC__
 #define __laneID (threadIdx.x % warpSize)
-#define __global_warp_id (CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize))
+#define __local_warp_id (threadIdx.x / warpSize)
+#define __global_warp_id (CEILDIV(blockDim.x, warpSize) * blockIdx.x + __local_warp_id)
 #endif // __CUDACC__
 
 
@@ -71,7 +73,7 @@ class SlabAlloc {		//A single object of this will reside in global memory
 	private:
 		int numSuperBlocks;
 		const int initNumSuperBlocks;
-		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
+//		SuperBlock ** superBlocks;		// Array of length 'maxSuperBlocks', allocated on the device
 
 	public:
 		__host__ SlabAlloc(int numSuperBlocks);
@@ -84,6 +86,15 @@ class SlabAlloc {		//A single object of this will reside in global memory
 		__device__ void deallocate(Address);
 };
 
+namespace allocator {
+	extern __constant__ SlabAlloc * slab_alloc;
+	extern __constant__ SuperBlock ** superBlocks;
+	extern SlabAlloc * h_slab_alloc;
+	extern SuperBlock ** h_superBlocks;
+	__host__ void init(int numSuperBlocks);
+	__host__ void destroy();
+}
+
 class ResidentBlock {			//Objects of this will be on thread-local memory
 		Address starting_addr;		//address of the 1st memory unit of the resident block
 
@@ -91,10 +102,9 @@ class ResidentBlock {			//Objects of this will be on thread-local memory
 		int resident_changes;
 
 	public:
-		SlabAlloc * const slab_alloc;
 		static const int max_resident_changes = 1024;
 
-		__device__ ResidentBlock(SlabAlloc *);
+		__device__ ResidentBlock();
 		__device__ void set();		//Chooses a new memory block as a resident block
 #ifndef NDEBUG
 		__device__ Address warp_allocate(int*);

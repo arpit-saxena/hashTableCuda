@@ -11,13 +11,13 @@ __device__ inline int warpID() {
 	return CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 }
 
-//__device__ void readanddeallocate(SlabAlloc * s, ResidentBlock * rb, Address a) {
+//__device__ void readanddeallocate(SlabAlloc * s, Address a) {
 //	uint32_t data1 = *(s->SlabAddress(a, laneID()));
 //	__syncwarp();
 //	Address address = __shfl_sync(WARP_MASK, data1, ADDRESS_LANE);
 //	uint32_t data2 = *(s->SlabAddress(address, laneID()));
-//	//s->deallocate(a);
-//	//s->deallocate(address);
+//	s->deallocate(a);
+//	s->deallocate(address);
 //	if(laneID() != 31 && (data1 != warpID() || data2 != warpID() + (1 << 18)))
 //		printf("After writing, Warp %d, Lane %d: Slab 1 - %d, Slab 2 - %d\n", warpID(), laneID(), data1, data2);
 //}
@@ -25,7 +25,8 @@ __device__ inline int warpID() {
 //__device__ float sum_local_rbl_changes = 0.0;
 //__device__ float sum_sqr_local_rbl_changes = 0.0;
 //
-//__global__ void checkallbitmaps(SlabAlloc* s) {
+//__global__ void checkallbitmaps() {
+//	SlabAlloc* s = allocator::slab_alloc;
 //	//Checking if array s->bitmaps has been copied properly (it most probably has)
 //	int i = blockDim.x * blockIdx.x + threadIdx.x;
 //	while (i < s->maxSuperBlocks * SuperBlock::numMemoryBlocks) {
@@ -37,11 +38,11 @@ __device__ inline int warpID() {
 //	}
 //}
 //
-//__global__ void kernel(SlabAlloc * s) {
-//	ResidentBlock rb(s);
+//__global__ void kernel() {
+//	ResidentBlock rb;
 //	int x = 0;
 //	int y = 0;
-//
+//	SlabAlloc * s = allocator::slab_alloc;
 //	Address a = rb.warp_allocate(&x), a2 = rb.warp_allocate(&y);
 //	
 //	// Calculation of average local_rbl_changes, and terminating threads for whom any one warp_allocate() fails
@@ -67,30 +68,27 @@ __device__ inline int warpID() {
 //	ptr = s->SlabAddress(a2, laneID());
 //	*ptr = warpID()+(1<<18);
 //	
-//	readanddeallocate(s, &rb, a);
+//	readanddeallocate(s, a);
 //}
 //
 //void test1() {
 //	const ULL log2slabsPerWarp = 0;	// Cannot be greater than SLAB_BITS(10) + MEMORYBLOCK_BITS(8)
 //	// Make sure numWarps is big enough so that numSuperBlocks is non-zero
 //	const ULL numWarps = 1 << 18, numSuperBlocks = numWarps >> SLAB_BITS + MEMORYBLOCK_BITS - log2slabsPerWarp;
-//	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
-//	SlabAlloc * d_s;
-//	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
-//	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
+//	allocator::init(numSuperBlocks);
 //	int numBlocks = numWarps>>5, threadsPerBlock = 1024;
 //	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<28));
 //
-//	/*checkallbitmaps <<< ((s->maxSuperBlocks * SuperBlock::numMemoryBlocks) >> 5), 1024 >>> (d_s);
+//	checkallbitmaps <<< ((SlabAlloc::maxSuperBlocks * SuperBlock::numMemoryBlocks) >> 5), 1024 >>> ();
 //	gpuErrchk(cudaDeviceSynchronize());
-//	printf("Completed check of array s->bitmaps before running kernel\n");*/
+//	printf("Completed check of array s->bitmaps before running kernel\n");
 //
-//	kernel<<<numBlocks,threadsPerBlock>>>(d_s);
+//	kernel<<<numBlocks,threadsPerBlock>>>();
 //	gpuErrchk(cudaDeviceSynchronize());
 //
-//	/*checkallbitmaps <<< ((s->maxSuperBlocks * SuperBlock::numMemoryBlocks) >> 5), 1024 >>> (d_s);
+//	checkallbitmaps <<< ((SlabAlloc::maxSuperBlocks * SuperBlock::numMemoryBlocks) >> 5), 1024 >>> ();
 //	gpuErrchk(cudaDeviceSynchronize());
-//	printf("Completed check of array s->bitmaps after running kernel\n");*/
+//	printf("Completed check of array s->bitmaps after running kernel\n");
 //
 //	float avg_local_rbl_changes = 0.0, var_local_rbl_changes = 0.0;
 //	gpuErrchk(cudaMemcpyFromSymbol(&avg_local_rbl_changes, sum_local_rbl_changes, sizeof(float)));
@@ -99,15 +97,14 @@ __device__ inline int warpID() {
 //	var_local_rbl_changes = var_local_rbl_changes / (numWarps << 5) - (avg_local_rbl_changes * avg_local_rbl_changes);
 //	printf("Average local_rbl_changes = %f, Variance in local_rbl_changes=%f\n", avg_local_rbl_changes, var_local_rbl_changes);
 //
-//	gpuErrchk(cudaMemcpy(s, d_s, sizeof(SuperBlock), cudaMemcpyDefault));
-//	printf("Final no. of superblocks: %d\n", s->getNumSuperBlocks());
-//	gpuErrchk(cudaFree(d_s));
-//	delete s;
+//	/*gpuErrchk(cudaMemcpy(allocator::h_slab_alloc, allocator::slab_alloc, sizeof(SuperBlock), cudaMemcpyDefault));
+//	printf("Final no. of superblocks: %d\n", allocator::h_slab_alloc->getNumSuperBlocks());*/
+//	allocator::destroy();
 //}
 //
 //
 //__global__ void kernel2(SlabAlloc * s) {
-//	ResidentBlock rb(s);
+//	ResidentBlock rb;
 //	int x = 0;
 //	for(int i = 0; i <= MemoryBlock::numSlabs; ++i) {
 //		if(threadIdx.x == 0)	printf("\r%.4d", i);
@@ -138,8 +135,8 @@ __managed__ uint32_t finder_success = 0;
 __device__ inline uint32_t Key() {		return blockIdx.x*blockDim.x + threadIdx.x;	}
 __device__ inline uint32_t Value() {	return Key()+5;	}
 
-__global__ void kernel3ins(HashTable* h, SlabAlloc* s) {
-	ResidentBlock rb(s);
+__global__ void kernel3ins(HashTable* h) {
+	ResidentBlock rb;
 	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Insert;
@@ -149,14 +146,14 @@ __global__ void kernel3ins(HashTable* h, SlabAlloc* s) {
 	op.run();
 }
 
-__global__ void kernel3inscheck(HashTable* h, SlabAlloc* s) {
-	ResidentBlock rb(s);
+__global__ void kernel3inscheck(HashTable* h) {
+	//ResidentBlock rb;
 	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Search;
 	ins.key = key;
 	ins.value = SEARCH_NOT_FOUND;
-	HashTableOperation op(&ins, h, &rb);
+	HashTableOperation op(&ins, h, nullptr);
 	op.run();
 	if (ins.value != SEARCH_NOT_FOUND) {
 		atomicAdd(&search_success, 1);
@@ -179,25 +176,25 @@ void findvaluescheck(HashTable * h, int numBlocks, int threadsPerBlock) {
 	cudaFreeHost(keys);
 }
 
-__global__ void kernel3del(HashTable* h, SlabAlloc* s) {
-	ResidentBlock rb(s);
+__global__ void kernel3del(HashTable* h) {
+	//ResidentBlock rb;
 	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Delete;
 	ins.key = key;
 	ins.value = value;
-	HashTableOperation op(&ins, h, &rb);
+	HashTableOperation op(&ins, h, nullptr);
 	op.run();
 }
 
-__global__ void kernel3delcheck(HashTable* h, SlabAlloc* s) {
-	ResidentBlock rb(s);
+__global__ void kernel3delcheck(HashTable* h) {
+	//ResidentBlock rb;
 	uint32_t key = Key(), value = Value();
 	Instruction ins;
 	ins.type = Instruction::Type::Search;
 	ins.key = key;
 	ins.value = SEARCH_NOT_FOUND;
-	HashTableOperation op(&ins, h, &rb);
+	HashTableOperation op(&ins, h, nullptr);
 	op.run();
 	if (ins.value == SEARCH_NOT_FOUND) {
 		atomicAdd(&delete_success, 1);
@@ -207,29 +204,25 @@ __global__ void kernel3delcheck(HashTable* h, SlabAlloc* s) {
 void test3() {
 	const ULL numThreads = 1<<18;
 	const ULL numSuperBlocks = 1, numWarps = numThreads >> 5;
-	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
-	SlabAlloc * d_s;
-	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
-	gpuErrchk(cudaMemcpy(d_s, s, sizeof(SlabAlloc), cudaMemcpyDefault));
+	allocator::init(numSuperBlocks);
 	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<30));
 	
 	int no_of_buckets = numThreads / 128;	// avg slabs per bucket ~ 9-10, assuming 1 insert instruction per thread
-	HashTable * h = new HashTable(no_of_buckets, d_s);
+	HashTable * h = new HashTable(no_of_buckets);
 	HashTable * d_h;
 	gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
 	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
 
 	int numBlocks = numWarps>>1, threadsPerBlock = 64;
-	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
-	kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
-	findvaluescheck(h, numBlocks * threadsPerBlock, threadsPerBlock);
-	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
-	kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h, d_s);
+	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h);
+	kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
+	findvaluescheck(h, numBlocks*threadsPerBlock, threadsPerBlock);
+	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h);
+	kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h);
 
 	gpuErrchk(cudaFree(d_h));
 	delete h;
-	gpuErrchk(cudaFree(d_s));
-	delete s;
+	allocator::destroy();
 
 	printf("searcher() success rate = %f%\n", (float)search_success * 100 / (float)numThreads);
 	printf("deleter() success rate = %f%\n", (float)delete_success * 100 / (float)numThreads);
@@ -238,7 +231,7 @@ void test3() {
 
 //
 //__global__ void kernel4(SlabAlloc* s) {
-//	ResidentBlock rb(s);
+//	ResidentBlock rb;
 //	Address a = rb.warp_allocate();
 //	uint32_t left = threadIdx.x, right = threadIdx.x + 5;
 //	uint32_t data[2] = { left, right };
