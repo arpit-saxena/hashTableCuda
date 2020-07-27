@@ -137,28 +137,19 @@ __device__ inline uint32_t Value() {	return Key()+5;	}
 
 __global__ void kernel3ins(HashTable* h) {
 	ResidentBlock rb;
-	uint32_t key = Key(), value = Value();
-	Instruction ins;
-	ins.type = Instruction::Type::Insert;
-	ins.key = key;
-	ins.value = value;
-	HashTableOperation op(&ins, h, &rb);
-	op.run();
+	HashTableOperation op(h, &rb);
+	op.run(Instruction::Type::Insert, Key(), Value());
 }
 
-__global__ void kernel3inscheck(HashTable* h) {
+/*__global__ void kernel3inscheck(HashTable* h) {
 	//ResidentBlock rb;
-	uint32_t key = Key(), value = Value();
-	Instruction ins;
-	ins.type = Instruction::Type::Search;
-	ins.key = key;
-	ins.value = SEARCH_NOT_FOUND;
-	HashTableOperation op(&ins, h, nullptr);
-	op.run();
-	if (ins.value != SEARCH_NOT_FOUND) {
+	uint32_t value = SEARCH_NOT_FOUND;
+	HashTableOperation op(h, nullptr);
+	op.run(Instruction::Type::Search, Key(), value);
+	if (value != SEARCH_NOT_FOUND) {
 		atomicAdd(&search_success, 1);
 	}
-}
+}*/
 
 __device__ void callBack(uint32_t key, uint32_t value) {
 	atomicAdd(&finder_success, 1);
@@ -178,28 +169,19 @@ void findvaluescheck(HashTable * h, int numBlocks, int threadsPerBlock) {
 
 __global__ void kernel3del(HashTable* h) {
 	//ResidentBlock rb;
-	uint32_t key = Key(), value = Value();
-	Instruction ins;
-	ins.type = Instruction::Type::Delete;
-	ins.key = key;
-	ins.value = value;
-	HashTableOperation op(&ins, h, nullptr);
-	op.run();
+	HashTableOperation op(h, nullptr);
+	op.run(Instruction::Type::Delete, Key(), Value());
 }
 
-__global__ void kernel3delcheck(HashTable* h) {
+/*__global__ void kernel3delcheck(HashTable* h) {
 	//ResidentBlock rb;
-	uint32_t key = Key(), value = Value();
-	Instruction ins;
-	ins.type = Instruction::Type::Search;
-	ins.key = key;
-	ins.value = SEARCH_NOT_FOUND;
-	HashTableOperation op(&ins, h, nullptr);
-	op.run();
-	if (ins.value == SEARCH_NOT_FOUND) {
+	uint32_t value = SEARCH_NOT_FOUND;
+	HashTableOperation op(h, nullptr);
+	op.run(Instruction::Type::Search, Key(), value);
+	if (value == SEARCH_NOT_FOUND) {
 		atomicAdd(&delete_success, 1);
 	}
-}
+}*/
 
 void test3() {
 	const ULL numThreads = 1<<18;
@@ -213,12 +195,12 @@ void test3() {
 	gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
 	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
 
-	int numBlocks = numWarps>>1, threadsPerBlock = 64;
+	int numBlocks = numWarps>>1, threadsPerBlock = THREADS_PER_BLOCK;
 	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h);
-	kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
+	//kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
 	findvaluescheck(h, numBlocks*threadsPerBlock, threadsPerBlock);
 	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h);
-	kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h);
+	//kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h);
 
 	gpuErrchk(cudaFree(d_h));
 	delete h;

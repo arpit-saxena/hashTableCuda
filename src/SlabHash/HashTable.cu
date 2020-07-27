@@ -5,7 +5,7 @@
 
 __host__ HashTable::HashTable(int size) : no_of_buckets(size) {
 	gpuErrchk(cudaMalloc(&base_slabs, no_of_buckets*sizeof(Address)));
-	int threads_per_block = 64 /* warp size*2 */ , blocks = no_of_buckets/(threads_per_block/32);
+	int threads_per_block = THREADS_PER_BLOCK /* warp size*2 */ , blocks = no_of_buckets/(threads_per_block/32);
 	utilitykernel::init_table<<<blocks, threads_per_block>>>(no_of_buckets, base_slabs);
 }
 
@@ -35,10 +35,10 @@ __device__ uint32_t * HashTableOperation::SlabAddress(Address slab_addr, int lan
 	return allocator::slab_alloc->SlabAddress(slab_addr, laneID);
 }
 
-__device__ HashTableOperation::HashTableOperation(Instruction * const __restrict__ ins, const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb)
- : hashtable(h), resident_block(rb), instr(ins) {}
+__device__ HashTableOperation::HashTableOperation(const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb)
+ : hashtable(h), resident_block(rb){}
 
-__device__ void HashTableOperation::run(bool is_active) {
+__device__ void HashTableOperation::run(const Instruction::Type type, const uint32_t key, uint32_t value, bool is_active) {
 	static const int warp_size = 32;
 	__shared__ uint32_t s_read_data[THREADS_PER_BLOCK];
 	__shared__ uint32_t s_src_key[THREADS_PER_BLOCK/warp_size];
@@ -49,7 +49,7 @@ __device__ void HashTableOperation::run(bool is_active) {
 	__shared__ int s_src_lane[THREADS_PER_BLOCK/warp_size];
 	__shared__ Instruction::Type s_src_instrtype[THREADS_PER_BLOCK/warp_size];
 
-	uint32_t &read_data = s_read_data[threadIdx.x], &src_key = s_src_key[__local_warp_id],
+	uint32_t &src_key = s_src_key[__local_warp_id],
 			 &src_value = s_src_value[__local_warp_id], &work_queue = s_work_queue[__local_warp_id], 
 			 &old_work_queue = s_old_work_queue[__local_warp_id];
 	Address &next = s_next[__local_warp_id];
@@ -62,14 +62,14 @@ __device__ void HashTableOperation::run(bool is_active) {
 			src_lane = __ffs(work_queue);
 			assert(src_lane>=1 && src_lane <= 32);
 			--src_lane;
-			src_instrtype = static_cast<Instruction::Type>(__shfl_sync(WARP_MASK, instr->type, src_lane));
-			src_key = __shfl_sync(WARP_MASK, instr->key, src_lane);
-			src_value = __shfl_sync(WARP_MASK, instr->value, src_lane);
+			src_instrtype = static_cast<Instruction::Type>(__shfl_sync(WARP_MASK, type, src_lane));
+			src_key = __shfl_sync(WARP_MASK, key, src_lane);
+			src_value = __shfl_sync(WARP_MASK, value, src_lane);
 			unsigned src_bucket = HashFunction::hash(src_key, hashtable->no_of_buckets);
 			next = hashtable->base_slabs[src_bucket];
 			old_work_queue = work_queue;
 		}
-		read_data = ReadSlab(next, __laneID);
+		s_read_data[threadIdx.x] = ReadSlab(next, __laneID);
 		switch(src_instrtype) {
 			case Instruction::Insert:
 				inserter(s_read_data, src_key, src_value, src_lane, work_queue, next);
@@ -77,14 +77,14 @@ __device__ void HashTableOperation::run(bool is_active) {
 			case Instruction::Delete:
 				deleter(s_read_data, src_key, src_value, src_lane, work_queue, next);
 				break;
-			case Instruction::Search:
+			/*case Instruction::Search:
 				searcher(s_read_data, src_key, src_lane, work_queue, next);
-				break;
+				break;*/
 		}
 	}
 }
 
-__device__ void HashTableOperation::searcher(uint32_t s_read_data[], uint32_t &src_key, int &src_lane, uint32_t &work_queue, Address &next) {
+/*__device__ void HashTableOperation::searcher(uint32_t s_read_data[], uint32_t src_key, int src_lane, uint32_t &work_queue, Address &next) {
 	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == src_key));
 	if(__laneID == src_lane) {
 		if(found_lane != 0) {
@@ -104,9 +104,9 @@ __device__ void HashTableOperation::searcher(uint32_t s_read_data[], uint32_t &s
 			}
 		}
 	}
-}
+}*/
 
-__device__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t &src_key, uint32_t &src_value, int &src_lane, uint32_t &work_queue, Address &next) {
+__device__ __forceinline__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
 	auto dest_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == EMPTY_KEY));
 	if(dest_lane != 0){
 		--dest_lane;
@@ -137,7 +137,7 @@ __device__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t &s
 	}
 }
 
-__device__ void HashTableOperation::deleter(uint32_t s_read_data[], uint32_t &src_key, uint32_t &src_value, int &src_lane, uint32_t &work_queue, Address &next) {
+__device__ __forceinline__ void HashTableOperation::deleter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
 	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == src_key && s_read_data[threadIdx.x + 1] == src_value));
 	if(__laneID == src_lane) {
 		if(found_lane != 0) {
@@ -166,7 +166,7 @@ __host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (
 	uint32_t * d_keys;
 	gpuErrchk(cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t)));
 	gpuErrchk(cudaMemcpyAsync(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault));
-	int threads_per_block = 64, blocks = CEILDIV(no_of_threads, threads_per_block);
+	int threads_per_block = THREADS_PER_BLOCK, blocks = CEILDIV(no_of_threads, threads_per_block);
 	utilitykernel::findvalueskernel<<<blocks, threads_per_block>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback);
 }
 

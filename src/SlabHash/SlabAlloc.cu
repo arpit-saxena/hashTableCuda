@@ -96,11 +96,9 @@ __device__ void SlabAlloc::allocateSuperBlock() {
 		if (numSuperBlocks < maxSuperBlocks) {
 			SuperBlock * newSuperBlock = (SuperBlock *) malloc(sizeof(SuperBlock));
 			if (newSuperBlock == nullptr) {
-				/*this->status = 3;
 				int OutOfMemory = 0;
 				printf("Finally, %d superblocks\n", numSuperBlocks);
 				assert(OutOfMemory);
-				asm("trap;");*/
 				return;
 			}
 			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (allocator::superBlocks + numSuperBlocks), (ULL) nullptr, (ULL) newSuperBlock);
