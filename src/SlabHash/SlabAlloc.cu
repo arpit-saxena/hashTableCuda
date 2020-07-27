@@ -5,81 +5,61 @@
 #include <assert.h>
 #include <new>
 
-BlockBitMap::BlockBitMap() {
-	memset(bitmap, 0, 32*sizeof(uint32_t));
-}
+__device__ unsigned SlabAlloc::numSuperBlocks = 0;
+__constant__ SuperBlock * SlabAlloc::initsuperBlocks[initNumSuperBlocks];
+__device__ SuperBlock * SlabAlloc::dyn_allocated_superBlocks[maxSuperBlocks-initNumSuperBlocks];
 
-__host__ SlabAlloc::SlabAlloc(int numSuperBlocks = maxSuperBlocks) : initNumSuperBlocks(numSuperBlocks) {
-	this -> numSuperBlocks = numSuperBlocks;
-	if (numSuperBlocks > maxSuperBlocks) {
+__device__ BlockBitMap SlabAlloc::bitmaps[maxSuperBlocks * SuperBlock::numMemoryBlocks];
+
+__host__ void SlabAlloc::init() {
+	if (initNumSuperBlocks > maxSuperBlocks) {
 		//TODO: Better way to handle this?
-		printf("Can't allocate %d super blocks. Max is %d", numSuperBlocks, maxSuperBlocks);
+		printf("Can't allocate %d super blocks. Max is %d", initNumSuperBlocks, maxSuperBlocks);
 		return;
 	}
-
-	gpuErrchk(cudaMalloc(&allocator::h_superBlocks, maxSuperBlocks*sizeof(SuperBlock *)));
-	gpuErrchk(cudaMemcpyToSymbol(allocator::superBlocks, &allocator::h_superBlocks, sizeof(SuperBlock **)));
+	int x = initNumSuperBlocks;
+	gpuErrchk(cudaMemcpyToSymbol(numSuperBlocks, &x, sizeof(unsigned int)));
 
 	for (int i = 0; i < maxSuperBlocks; i++) {
 		SuperBlock * temp = nullptr;
-		if(i < numSuperBlocks) {
+		if(i < initNumSuperBlocks) {
 			gpuErrchk(cudaMalloc(&temp, sizeof(SuperBlock)));
+			gpuErrchk(cudaMemcpyToSymbol(initsuperBlocks, &temp, sizeof(SuperBlock *), i*sizeof(SuperBlock *)));
 		}
-		gpuErrchk(cudaMemcpy(allocator::h_superBlocks + i, &temp, sizeof(SuperBlock *), cudaMemcpyDefault));
+		else {
+			gpuErrchk(cudaMemcpyToSymbol(dyn_allocated_superBlocks, &temp, sizeof(SuperBlock *), (i-initNumSuperBlocks)*sizeof(SuperBlock *)));
+		}
 	}
+
+	BlockBitMap * b = nullptr;
+	size_t size = 0;
+	gpuErrchk(cudaGetSymbolAddress((void **)&b, bitmaps));
+	gpuErrchk(cudaGetSymbolSize(&size, bitmaps));
+	gpuErrchk(cudaMemset(b, 0, size));
 }
 
-__host__ SlabAlloc::~SlabAlloc() {
+__host__ void SlabAlloc::destroy() {
 	int size = maxSuperBlocks - initNumSuperBlocks;
 	if (size != 0) {
 		int threadsPerBlock = 64, numBlocks = CEILDIV(size, threadsPerBlock);
-		utilitykernel::clean_superblocks<<<numBlocks, threadsPerBlock>>>(allocator::h_superBlocks + initNumSuperBlocks, size);
+		SlabAlloc::clean_superblocks<<<numBlocks, threadsPerBlock>>>(size);
 	}
 
-	SuperBlock **  h_superBlocks;
-	gpuErrchk(cudaMallocHost(&h_superBlocks, initNumSuperBlocks * sizeof(SuperBlock *)));
-	gpuErrchk(cudaMemcpy(h_superBlocks, allocator::h_superBlocks, initNumSuperBlocks*sizeof(SuperBlock *), cudaMemcpyDefault)); // Making it async would cause problems
 	for (int i = 0; i < initNumSuperBlocks; i++) {
-		if(h_superBlocks[i])	gpuErrchk(cudaFree(h_superBlocks[i]));
+		SuperBlock * ptr = nullptr;
+		gpuErrchk(cudaMemcpyFromSymbol(&ptr, initsuperBlocks, sizeof(SuperBlock *), i*sizeof(SuperBlock *)));
+		if(ptr)	gpuErrchk(cudaFree(ptr));
 	}
-
-	cudaFreeHost(h_superBlocks);
-	gpuErrchk(cudaFree(allocator::h_superBlocks));
 }
 
 __global__
-void utilitykernel::clean_superblocks(SuperBlock ** superBlocks, const ULL size) {
+void SlabAlloc::clean_superblocks(const ULL size) {
 	int threadID = blockDim.x * blockIdx.x + threadIdx.x;
 	while(threadID < size) {
-		if(superBlocks[threadID])	free(superBlocks[threadID]);
-		superBlocks[threadID] = nullptr;
+		if(dyn_allocated_superBlocks[threadID])	free(dyn_allocated_superBlocks[threadID]);
+		dyn_allocated_superBlocks[threadID] = nullptr;
 		threadID += gridDim.x * blockDim.x;
 	}
-}
-
-__constant__ SlabAlloc * allocator::slab_alloc = nullptr;
-__constant__ SuperBlock ** allocator::superBlocks = nullptr;
-SlabAlloc * allocator::h_slab_alloc = nullptr;
-SuperBlock** allocator::h_superBlocks = nullptr;
-
-__host__ void allocator::init(int numSuperBlocks) {
-	h_slab_alloc = new SlabAlloc(numSuperBlocks);
-	SlabAlloc * d_s;
-	gpuErrchk(cudaMalloc(&d_s, sizeof(SlabAlloc)));
-	gpuErrchk(cudaMemcpy(d_s, h_slab_alloc, sizeof(SlabAlloc), cudaMemcpyDefault));
-	gpuErrchk(cudaMemcpyToSymbol(slab_alloc, &d_s, sizeof(SlabAlloc *)));
-}
-
-__host__ void allocator::destroy() {
-	SlabAlloc* d_slab_alloc;
-	gpuErrchk(cudaMemcpyFromSymbol(&d_slab_alloc, slab_alloc, sizeof(SlabAlloc *)));
-	gpuErrchk(cudaFree(d_slab_alloc));
-	delete h_slab_alloc;
-}
-
-__device__ __host__
-int SlabAlloc::getNumSuperBlocks() {
-	return numSuperBlocks;
 }
 
 __device__
@@ -87,6 +67,16 @@ Address SlabAlloc::makeAddress(uint32_t superBlock_idx, uint32_t memoryBlock_idx
 	return (superBlock_idx << (SLAB_BITS + MEMORYBLOCK_BITS))
 			+ (memoryBlock_idx << SLAB_BITS)
 			+ slab_idx;
+}
+
+__device__ SuperBlock * SlabAlloc::getSuperBlockAddr(int index) {
+	if(index >= initNumSuperBlocks) {
+		index -= initNumSuperBlocks;
+		return dyn_allocated_superBlocks[index];
+	}
+	else {
+		return initsuperBlocks[index];
+	}
 }
 
 // Currently called with full warp only, so it also assumes full warp
@@ -101,7 +91,7 @@ __device__ void SlabAlloc::allocateSuperBlock() {
 				assert(OutOfMemory);
 				return;
 			}
-			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (allocator::superBlocks + numSuperBlocks), (ULL) nullptr, (ULL) newSuperBlock);
+			SuperBlock * oldSuperBlock = (SuperBlock *) atomicCAS((ULL *) (dyn_allocated_superBlocks + numSuperBlocks - initNumSuperBlocks), (ULL) nullptr, (ULL) newSuperBlock);
 			if (oldSuperBlock != nullptr) {
 				free(newSuperBlock);
 			} else {
@@ -115,7 +105,7 @@ __device__ uint32_t * SlabAlloc::SlabAddress(Address addr, uint32_t laneID){
 	uint32_t slab_idx = addr & ((1 << SLAB_BITS) - 1);
 	uint32_t block_idx = (addr >> SLAB_BITS) & ((1 << MEMORYBLOCK_BITS) - 1);
 	uint32_t superBlock_idx = (addr >> (SLAB_BITS + MEMORYBLOCK_BITS));
-	return (allocator::superBlocks[superBlock_idx]->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
+	return (getSuperBlockAddr(superBlock_idx)->memoryBlocks[block_idx].slabs[slab_idx].arr) + laneID;
 }
 
 __device__ uint32_t SlabAlloc::ReadSlab(Address slab_addr, int laneID) {
@@ -142,7 +132,7 @@ __device__ ResidentBlock::ResidentBlock(){
 // Needs full warp
 __device__ void ResidentBlock::set() {
 	if (resident_changes % max_resident_changes == 0 && resident_changes != 0) {
-		allocator::slab_alloc->allocateSuperBlock();
+		SlabAlloc::allocateSuperBlock();
 		#ifndef NDEBUG
 		if(__laneID == 0)		//DEBUG
 			printf("\tset()->allocateSuperBlock() called by set(), resident_changes=%d\n", resident_changes);
@@ -151,7 +141,7 @@ __device__ void ResidentBlock::set() {
 	}
 	//unsigned memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes, SuperBlock::numMemoryBlocks);
 	uint32_t super_memory_block_no = HashFunction::memoryblock_hash(__global_warp_id, resident_changes,
-					allocator::slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks/*total_memory_blocks*/);
+					SlabAlloc::numSuperBlocks * SuperBlock::numMemoryBlocks/*total_memory_blocks*/);
 #ifndef NDEBUG
 	//if (__laneID == 0 && resident_changes != -1)		//DEBUG
 //		printf("\tset()->super_memory_block_no=hash(__global_warp_id=%d, resident_changes=%d, total_memory_blocks=%d)=%d\n", __global_warp_id, resident_changes, slab_alloc->getNumSuperBlocks() * SuperBlock::numMemoryBlocks, super_memory_block_no);
@@ -159,7 +149,7 @@ __device__ void ResidentBlock::set() {
 
 	starting_addr = super_memory_block_no << SLAB_BITS;
 	++resident_changes;
-	BlockBitMap * resident_bitmap = allocator::slab_alloc->bitmaps + super_memory_block_no;
+	BlockBitMap * resident_bitmap = SlabAlloc::bitmaps + super_memory_block_no;
 	resident_bitmap_line = resident_bitmap->bitmap[__laneID];
 }
 
@@ -190,7 +180,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 		if (__laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;
 			auto global_memory_block_no = starting_addr >> SLAB_BITS;
-			BlockBitMap* resident_bitmap = allocator::slab_alloc->bitmaps + global_memory_block_no;
+			BlockBitMap* resident_bitmap = SlabAlloc::bitmaps + global_memory_block_no;
 			uint32_t* global_bitmap_line = resident_bitmap->bitmap + __laneID;
 			auto oldval = atomicOr(global_bitmap_line, i);
 			resident_bitmap_line = oldval | i;
@@ -202,7 +192,7 @@ __device__ Address ResidentBlock::warp_allocate() {
 		__syncwarp();
 		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
 		if (toreturn != EMPTY_ADDRESS) {
-			*(allocator::slab_alloc->SlabAddress(toreturn, __laneID)) = EMPTY_ADDRESS;
+			*(SlabAlloc::SlabAddress(toreturn, __laneID)) = EMPTY_ADDRESS;
 			return toreturn;
 		}
 		// TODO check for divergence on this functions return
@@ -255,7 +245,7 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 		if (__laneID == allocator_thread_no) {
 			uint32_t i = 1 << slab_no;
 			auto global_memory_block_no = starting_addr >> SLAB_BITS;
-			BlockBitMap* resident_bitmap = allocator::slab_alloc->bitmaps + global_memory_block_no;
+			BlockBitMap* resident_bitmap = SlabAlloc::bitmaps + global_memory_block_no;
 			uint32_t* global_bitmap_line = resident_bitmap->bitmap + __laneID;
 			auto oldval = atomicOr(global_bitmap_line, i);
 			resident_bitmap_line = oldval | i;
@@ -273,15 +263,15 @@ __device__ Address ResidentBlock::warp_allocate(int * x) {		//DEBUG
 		__syncwarp();
 		Address toreturn = __shfl_sync(WARP_MASK, allocated_address, allocator_thread_no);
 		if (toreturn != EMPTY_ADDRESS) {
-			//uint32_t* ptr = allocator::slab_alloc->SlabAddress(toreturn, __laneID);
-			*(allocator::slab_alloc->SlabAddress(toreturn, __laneID)) = EMPTY_ADDRESS;
+			//uint32_t* ptr = SlabAlloc::SlabAddress(toreturn, __laneID);
+			*(SlabAlloc::SlabAddress(toreturn, __laneID)) = EMPTY_ADDRESS;
 			return toreturn;
 		}
 		// TODO check for divergence on this functions return
 	}
 	//This means all max_local_rbl_changes attempts to allocate memory failed as the atomicCAS call kept failing
 	//Terminate
-	/*allocator::slab_alloc->status = 2;
+	/*SlabAlloc::status = 2;
 	__threadfence();
 	int mahakhela = 0;
 	assert(mahakhela);
