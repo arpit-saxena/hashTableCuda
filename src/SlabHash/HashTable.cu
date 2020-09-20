@@ -153,13 +153,10 @@ __device__ __forceinline__ void HashTableOperation::deleter(uint32_t s_read_data
 	}
 }
 
-__host__ void HashTable::findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value)) {
+__host__ __device__ void HashTable::findvalues(uint32_t * d_keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value), cudaStream_t stream) {
 	unsigned no_of_threads = no_of_keys * 32;
-	uint32_t * d_keys;
-	gpuErrchk(cudaMalloc(&d_keys, no_of_keys*sizeof(uint32_t)));
-	gpuErrchk(cudaMemcpyAsync(d_keys, keys, no_of_keys*sizeof(uint32_t), cudaMemcpyDefault));
 	int threads_per_block = THREADS_PER_BLOCK, blocks = CEILDIV(no_of_threads, threads_per_block);
-	utilitykernel::findvalueskernel<<<blocks, threads_per_block>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback);
+	utilitykernel::findvalueskernel<<<blocks, threads_per_block, 0, stream>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback);
 }
 
 // If some warp divergence bullshit crops up, rewrite this function to have 1 lane

@@ -27,7 +27,8 @@ class HashTable {		// a single object of this will be made on host, and copied t
 	public:
 		__host__ HashTable(int size);
 		__host__ ~HashTable();
-		__host__ void findvalues(uint32_t * keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value));
+		//d_keys has to be an array on GPU-accessible memory
+		__host__ __device__ void findvalues(uint32_t * d_keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value), cudaStream_t stream = 0);
 
 		friend class HashTableOperation;
 };

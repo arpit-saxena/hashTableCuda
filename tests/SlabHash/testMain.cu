@@ -154,15 +154,22 @@ __device__ void callBack(uint32_t key, uint32_t value) {
 	atomicAdd(&finder_success, 1);
 }
 __device__ void (*d_callBack)(uint32_t, uint32_t) = callBack;
-void findvaluescheck(HashTable * h, int numBlocks, int threadsPerBlock) {
-	uint32_t * keys;
-	cudaMallocHost(&keys, sizeof(uint32_t) * numBlocks);
-	for(int i = 0; i < numBlocks; ++i) {
+void findvaluescheck(HashTable * h, int numKeys, cudaStream_t streams[]) {
+	uint32_t * keys, * d_keys;
+	cudaMallocHost(&keys, sizeof(uint32_t) * numKeys);
+	for(int i = 0; i < numKeys; ++i) {
 		keys[i] = i;
 	}
 	void* h_callBack;
 	gpuErrchk(cudaMemcpyFromSymbol(&h_callBack, d_callBack, sizeof(&callBack)));
-	h->findvalues(keys, numBlocks, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack));
+	
+	gpuErrchk(cudaMalloc(&d_keys, numKeys*sizeof(uint32_t)));
+	gpuErrchk(cudaMemcpyAsync(d_keys, keys, numKeys*sizeof(uint32_t), cudaMemcpyDefault));
+
+	for(int i = 0; i < numKeys/THREADS_PER_BLOCK; ++i) {
+		h->findvalues(d_keys+i*THREADS_PER_BLOCK, THREADS_PER_BLOCK, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack), streams[i]);
+	}
+	gpuErrchk(cudaFree(d_keys));
 	cudaFreeHost(keys);
 }
 
@@ -185,6 +192,13 @@ __global__ void kernel3del(HashTable* h) {
 void test3() {
 	const ULL numThreads = 1<<18;
 	const ULL numWarps = numThreads >> 5;
+	const int numBlocks = numWarps>>1, threadsPerBlock = THREADS_PER_BLOCK;
+
+	cudaStream_t streams[numBlocks];
+	for(int i = 0; i < numBlocks; ++i) {
+		gpuErrchk(cudaStreamCreate(streams+i));
+	}
+
 	SlabAlloc::init();
 	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<30));
 	
@@ -194,10 +208,9 @@ void test3() {
 	gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
 	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
 
-	int numBlocks = numWarps>>1, threadsPerBlock = THREADS_PER_BLOCK;
 	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h);
 	//kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
-	findvaluescheck(h, numBlocks*threadsPerBlock, threadsPerBlock);
+	findvaluescheck(h, numBlocks*threadsPerBlock, streams);
 	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h);
 	//kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h);
 
