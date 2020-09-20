@@ -167,7 +167,7 @@ void findvaluescheck(HashTable * h, int numKeys, cudaStream_t streams[]) {
 	gpuErrchk(cudaMemcpyAsync(d_keys, keys, numKeys*sizeof(uint32_t), cudaMemcpyDefault));
 
 	for(int i = 0; i < numKeys/THREADS_PER_BLOCK; ++i) {
-		h->findvalues(d_keys+i*THREADS_PER_BLOCK, numKeys, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack), streams[i]);
+		h->findvalues(d_keys+i*THREADS_PER_BLOCK, THREADS_PER_BLOCK, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack), streams[i]);
 	}
 	gpuErrchk(cudaFree(d_keys));
 	cudaFreeHost(keys);
@@ -221,10 +221,6 @@ void test3() {
 	printf("searcher() success rate = %f%\n", (float)search_success * 100 / (float)numThreads);
 	printf("deleter() success rate = %f%\n", (float)delete_success * 100 / (float)numThreads);
 	printf("finder() success rate = %f%\n", (float)finder_success*100/(float)numThreads);
-
-	for(int i = 0; i < numBlocks; ++i) {
-		gpuErrchk(cudaStreamDestroy(streams[i]));
-	}
 }
 
 //
