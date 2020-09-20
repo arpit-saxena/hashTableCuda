@@ -248,7 +248,14 @@ void unittest() {
 	SlabAlloc::destroy();
 }
 
+#include "SlabHash/Importer.h"
+#include <iostream>
+void testImporter() {
+	Mesh mesh = import("models/bunny.ply");
+	std::cout << "Num Triangles: " << mesh.numTriangles << std::endl;
+}
+
 int main() {
-	test3();
+	testImporter();
 	gpuErrchk(cudaDeviceReset());
 }
