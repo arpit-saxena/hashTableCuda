@@ -37,3 +37,6 @@ out/
 
 # VSCode stuff
 .vscode
+
+# Local assimp library and include files(on chiru9670's working directory)
+assimp/
