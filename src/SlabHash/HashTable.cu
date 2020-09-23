@@ -163,7 +163,7 @@ __host__ __device__ void HashTable::findvalues(uint32_t * d_keys, unsigned no_of
 // do all the collation of the found values into an array
 __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
 								unsigned no_of_buckets,	void (*callback)(uint32_t key, uint32_t value)) {
-	if(__global_warp_id < no_of_keys) {
+    for (int i = __global_warp_id; i < no_of_keys; i += CEILDIV(blockDim.x, warpSize)) {
 		const uint32_t src_key = d_keys[__global_warp_id];
 		const unsigned src_bucket = HashFunction::hash(src_key, no_of_buckets);
 		Address next = base_slabs[src_bucket];

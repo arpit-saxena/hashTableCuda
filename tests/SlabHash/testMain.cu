@@ -266,6 +266,13 @@ void unittest() {
 void testImporter() {
 	Mesh mesh = import("models/bunny.ply");
 	std::cout << "Num Triangles: " << mesh.numTriangles << std::endl;
+	for (int i = 0; i < mesh.numTriangles; i++) {
+		Triangle *t = &mesh.triangles[i];
+		for (int j = 0; j < 3; j++) {
+			float *v = t->vertices[j];
+			//std::cout << v[0] << ' ' << v[1] << ' ' << v[2] << std::endl;
+		}
+	}
 }
 
 int main() {

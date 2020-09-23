@@ -48,9 +48,9 @@ Mesh import(std::string fileName) {
         aiFace face = assimpMesh->mFaces[i];
         assert(face.mNumIndices == 3);
         for (int j = 0; j < 3; j++) {
-            mesh.triangles[i].vertices[j].x = vertices[face.mIndices[j]].x;
-            mesh.triangles[i].vertices[j].y = vertices[face.mIndices[j]].y;
-            mesh.triangles[i].vertices[j].z = vertices[face.mIndices[j]].z;
+            mesh.triangles[i].vertices[j][0] = vertices[face.mIndices[j]].x;
+            mesh.triangles[i].vertices[j][1] = vertices[face.mIndices[j]].y;
+            mesh.triangles[i].vertices[j][2] = vertices[face.mIndices[j]].z;
         }
     }
 
