@@ -4,18 +4,18 @@
 #include <string>
 
 struct Point {
-    int x;
-    int y;
-    int z;
+	int x;
+	int y;
+	int z;
 };
 
 struct Triangle {
-    Point vertices[3];
+	Point vertices[3];
 };
 
 struct Mesh {
-    Triangle *triangles = nullptr;
-    int numTriangles = 0;
+	Triangle *triangles = nullptr;
+	int numTriangles = 0;
 };
 
 Mesh import(std::string fileName);

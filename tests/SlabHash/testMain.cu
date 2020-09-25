@@ -268,7 +268,8 @@ void testImporter() {
 	std::cout << "Num Triangles: " << mesh.numTriangles << std::endl;
 }
 
+#include "render.h"
 int main() {
-	testImporter();
+	OpenGL::render();
 	gpuErrchk(cudaDeviceReset());
 }
