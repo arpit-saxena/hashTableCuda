@@ -164,18 +164,21 @@ __host__ __device__ void HashTable::findvalues(uint32_t * d_keys, unsigned no_of
 __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
 								unsigned no_of_buckets,	void (*callback)(uint32_t key, uint32_t value)) {
     for (int i = __global_warp_id; i < no_of_keys; i += CEILDIV(blockDim.x, warpSize)) {
-		const uint32_t src_key = d_keys[__global_warp_id];
-		const unsigned src_bucket = HashFunction::hash(src_key, no_of_buckets);
-		Address next = base_slabs[src_bucket];
-		while(next != EMPTY_ADDRESS) {
-			uint32_t read_data = SlabAlloc::ReadSlab(next, __laneID);
-			uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
-			uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == src_key);
-			if(found_key_lanes & 1 << __laneID ) {
-				callback(read_data, next_lane_data);
-			}
-			__syncwarp();
-			next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
+		findvalue(d_keys[__global_warp_id], callback);
+	}
+}
+
+__device__ __forceinline__ void HashTable::findvalue(uint32_t key, void (*callback)(uint32_t key, uint32_t value)) {
+	const unsigned src_bucket = HashFunction::hash(key, no_of_buckets);
+	Address next = base_slabs[src_bucket];
+	while(next != EMPTY_ADDRESS) {
+		uint32_t read_data = SlabAlloc::ReadSlab(next, __laneID);
+		uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
+		uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == key);
+		if(found_key_lanes & 1 << __laneID ) {
+			callback(read_data, next_lane_data);
 		}
+		__syncwarp();
+		next = __shfl_sync(WARP_MASK, read_data, ADDRESS_LANE);
 	}
 }
