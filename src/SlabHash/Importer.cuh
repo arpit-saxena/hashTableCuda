@@ -2,9 +2,15 @@
 #define IMPORTER_H
 
 #include <string>
+#include <glm/gtc/type_ptr.hpp>
+
+struct Vertex {
+    float point[3];
+    float normal[3];
+};
 
 struct Triangle {
-    float vertices[3][3];
+    Vertex vertices[3];
 };
 
 struct Mesh {
