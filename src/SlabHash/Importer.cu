@@ -5,7 +5,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include "Importer.h"
+#include "Importer.cuh"
 
 Mesh import(std::string fileName) {
     Assimp::Importer importer;
@@ -18,6 +18,7 @@ Mesh import(std::string fileName) {
     const aiScene *scene = importer.ReadFile(
         fileName,
         aiProcess_Triangulate |
+        aiProcess_GenNormals  |
         aiProcess_SortByPType
     );
 
@@ -40,17 +41,25 @@ Mesh import(std::string fileName) {
         std::cerr << "Mesh contains no faces. Can't proceed" << std::endl;
         return mesh;
     }
+    else if (!assimpMesh->HasNormals()) {
+        std::cerr << "Mesh contains no normals, and we like lighting!! Can't proceed" << std::endl;
+        return mesh;
+    }
 
-    aiVector3D *vertices = assimpMesh->mVertices;
+    aiVector3D *vertices = assimpMesh->mVertices, *normals = assimpMesh->mNormals;
     mesh.numTriangles = assimpMesh->mNumFaces;
     mesh.triangles = new Triangle[mesh.numTriangles];
     for (int i = 0; i < assimpMesh->mNumFaces; i++) {
         aiFace face = assimpMesh->mFaces[i];
         assert(face.mNumIndices == 3);
         for (int j = 0; j < 3; j++) {
-            mesh.triangles[i].vertices[j][0] = vertices[face.mIndices[j]].x;
-            mesh.triangles[i].vertices[j][1] = vertices[face.mIndices[j]].y;
-            mesh.triangles[i].vertices[j][2] = vertices[face.mIndices[j]].z;
+            mesh.triangles[i].vertices[j].point[0] = vertices[face.mIndices[j]].x;
+            mesh.triangles[i].vertices[j].point[1] = vertices[face.mIndices[j]].y;
+            mesh.triangles[i].vertices[j].point[2] = vertices[face.mIndices[j]].z;
+
+            mesh.triangles[i].vertices[j].normal[0] = normals[face.mIndices[j]].x;
+            mesh.triangles[i].vertices[j].normal[1] = normals[face.mIndices[j]].y;
+            mesh.triangles[i].vertices[j].normal[2] = normals[face.mIndices[j]].z;
         }
     }
 

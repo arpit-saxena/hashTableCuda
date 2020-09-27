@@ -261,7 +261,7 @@ void unittest() {
 	SlabAlloc::destroy();
 }
 
-#include "SlabHash/Importer.h"
+#include "SlabHash/Importer.cuh"
 #include <iostream>
 void testImporter() {
 	Mesh mesh = import("models/bunny.ply");
@@ -276,6 +276,7 @@ void testImporter() {
 }
 
 int main() {
+	//OpenGL::render();
 	testImporter();
 	gpuErrchk(cudaDeviceReset());
 }
