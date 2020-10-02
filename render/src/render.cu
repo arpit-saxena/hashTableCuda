@@ -203,14 +203,32 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1, unsig
 			meshindex = 1;
 			triangleindex = global_thread_id - numTriangles0;
 		}
+		__syncwarp();
 		Triangle * currtriangle = mesh + triangleindex;
-		transform(currtriangle, transformation_mat[meshindex]);
+		CUDA::updateTrianglePosition(currtriangle, meshindex, d_h, transformation_mat[meshindex]);
 		buffer[triangleindex] = *currtriangle;
 
-		CUDA::processTriangle(currtriangle, meshindex, d_h);
 
 		global_thread_id += gridDim.x * blockDim.x;
 	}
+}
+
+void OpenGLScene::runCuda()
+{
+	// map OpenGL buffer object for writing from CUDA
+	Triangle* dptr[2];
+	gpuErrchk(cudaGraphicsMapResources(2, vbo_resource));
+
+	size_t num_bytes[2];
+	for (int i = 0; i < 2; ++i) {
+		gpuErrchk(cudaGraphicsResourceGetMappedPointer((void**)(dptr + i), num_bytes + i, vbo_resource[i]));
+	}
+	CUDA::launch_kernel(dptr, num_bytes, this->meshes, this->d_h, this->isFirstFrame ? this->init_model_mat : this->trans_model_mat);
+	this->collided = CUDA::detectCollision(this->meshes, this->d_h);
+	
+	// unmap buffer object
+	gpuErrchk(cudaGraphicsUnmapResources(2, vbo_resource));
+	this->isFirstFrame = false;
 }
 
 OpenGLScene::OpenGLScene(Mesh h_meshes[2], glm::mat4 init_model_mat[2], glm::mat4 trans_model_mat[2], HashTable * d_h) {
@@ -275,24 +293,6 @@ void OpenGLScene::prepdraw()
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
-}
-
-void OpenGLScene::runCuda()
-{
-	// map OpenGL buffer object for writing from CUDA
-	Triangle* dptr[2];
-	gpuErrchk(cudaGraphicsMapResources(2, vbo_resource));
-	
-	size_t num_bytes[2];
-	for (int i = 0; i < 2; ++i) {
-		gpuErrchk(cudaGraphicsResourceGetMappedPointer((void**)(dptr+i), num_bytes + i, vbo_resource[i]));
-	}
-	CUDA::launch_kernel(dptr, num_bytes, this->meshes, this->d_h, this->isFirstFrame ? this->init_model_mat : this->trans_model_mat);
-	CUDA::processCurrentScene(this->meshes, this->d_h);
-
-	// unmap buffer object
-	gpuErrchk(cudaGraphicsUnmapResources(2, vbo_resource));
-	this->isFirstFrame = false;
 }
 
 void OpenGLScene::draw()

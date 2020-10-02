@@ -1,9 +1,10 @@
 #include "render.cuh"
 
-__host__ void CUDA::processCurrentScene(Mesh* d_meshes, HashTable* d_h) {
-
+__host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
+	bool collisionHappened = false;
+	return collisionHappened;
 }
 
-__device__ void CUDA::processTriangle(Triangle* t, int meshIndex, HashTable* d_h) {
-
+__device__ void CUDA::updateTrianglePosition(Triangle* currtriangle, int meshIndex, HashTable* d_h, const glm::mat4 transformation_mat) {
+	transform(currtriangle, transformation_mat);
 }

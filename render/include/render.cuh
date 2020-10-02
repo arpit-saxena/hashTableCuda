@@ -16,7 +16,7 @@ class OpenGLScene {
 	private:
 		GLuint VBO[2], VAO[2];
 		Shader * sh;
-		bool isFirstFrame;
+		bool isFirstFrame, collided;
 		struct cudaGraphicsResource* vbo_resource[2];
 		void registerVBO();
 		void prepdraw();
@@ -66,15 +66,16 @@ namespace CUDA {
 	* vertices using the transformation matrix(Intended to update the hashtable with the triangle's new voxel)
 	* meshIndex can be 0 or 1, indicating which mesh the triangle belongs to
 	* d_h is a device pointer pointing to the hashtable stored in device memory
+	* NOTE: needs full warp
 	*/
-	__device__ void processTriangle(Triangle * t, int meshIndex, HashTable * d_h);
+	__device__ void updateTrianglePosition(Triangle * currtriangle, int meshIndex, HashTable * d_h, const glm::mat4 transformation_mat);
 	/*
 	* Called in runCuda() after the call to launch_kernel(), to do further processing on all updated triangles
 	* Intended to use the updated hashtable to do collision detection
 	* d_meshes is a device pointer to the array of 2 meshes that make up the scene, stored in device memory
 	* d_h is a device pointer pointing to the hashtable stored in device memory
 	*/
-	__host__ void processCurrentScene(Mesh * d_meshes, HashTable * d_h);
+	__host__ bool detectCollision(Mesh * d_meshes, HashTable * d_h);
 
 	__host__ void launch_kernel(Triangle* buffer[2], size_t numbytes[2], Mesh meshes[2], 
 		HashTable* d_h, glm::mat4 transformation_mat[2]);
@@ -82,7 +83,7 @@ namespace CUDA {
 	__global__ void triangleKernel(Triangle * buffer0, Triangle * buffer1, unsigned numTriangles0, unsigned numTriangles1,
 		Triangle * mesh0, Triangle * mesh1, HashTable * d_h, glm::mat4 * transformation_mat);
 
-	__device__ void transform(Triangle * t, const glm::mat4 transformation_mat);
+	__device__ void transform(Triangle * currtriangle, const glm::mat4 transformation_mat);
 }
 
 #endif // !RENDER_H
