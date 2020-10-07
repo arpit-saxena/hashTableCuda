@@ -54,6 +54,7 @@ class OpenGLScene {
 		glm::mat4 * init_model_mat;		// 2 model matrices stored in device memory specifying initial position of the 2 meshes
 		glm::mat4 * trans_model_mat;	// 2 model matrices stored in device memory specifying the change in position of 
 										// the 2 meshes made in every frame
+		glm::mat4 * identity_model_mat;	// 2 identity model matrices stored in device memory, to be used to pause scene animation
 
 		int render();					// Initializes OpenGL, opens a window, and renders the scene by applying the
 										// transformation matrices to the meshes using a CUDA kernel via CUDA-OpenGL interop
@@ -77,13 +78,19 @@ namespace CUDA {
 	*/
 	__host__ bool detectCollision(Mesh * d_meshes, HashTable * d_h);
 
-	__host__ void launch_kernel(Triangle* buffer[2], size_t numbytes[2], Mesh meshes[2], 
+	__host__ void launch_kernel(Triangle* buffer[2], unsigned numTriangles[2], Mesh meshes[2], 
 		HashTable* d_h, glm::mat4 transformation_mat[2]);
 
 	__global__ void triangleKernel(Triangle * buffer0, Triangle * buffer1, unsigned numTriangles0, unsigned numTriangles1,
 		Triangle * mesh0, Triangle * mesh1, HashTable * d_h, glm::mat4 * transformation_mat);
 
 	__device__ void transform(Triangle * currtriangle, const glm::mat4 transformation_mat);
+}
+
+namespace collisionMarker {
+	extern __constant__ Triangle* d_meshes[2];
+	__host__ void init(Mesh meshes[2]);
+	__device__ void markCollision(int, int);
 }
 
 #endif // !RENDER_H

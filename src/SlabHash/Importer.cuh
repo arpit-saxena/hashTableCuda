@@ -7,6 +7,7 @@
 struct Vertex {
     float point[3];
     float normal[3];
+    float hasCollided;     // 0.0 if not collided, 1.0 if collided
 };
 
 struct Triangle {
