@@ -2,14 +2,17 @@
 in vec3 Normal;
 in vec3 FragPos;
 in vec3 vlightPos;
+in float Collided;
 
 out vec4 FragColor;
 
 uniform vec3 objectColor;
 uniform vec3 lightColor;
+uniform vec3 collidedColor;
 
 void main()
 {
+	vec3 ObjColor = ((Collided > 0.5) ? collidedColor : objectColor);
 	float ambientStrength = 0.1;
 	vec3 ambient = ambientStrength * lightColor;
 
@@ -25,5 +28,5 @@ void main()
 	vec3 specular = specularStrength * spec * lightColor;
 
 	float alpha = 1.0;
-	FragColor = vec4((ambient+diffuse+specular) * objectColor, alpha);
+	FragColor = vec4((ambient+diffuse+specular) * ObjColor, alpha);
 }

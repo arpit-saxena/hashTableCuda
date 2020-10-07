@@ -157,9 +157,8 @@ namespace {
 
 }
 
-__host__ void CUDA::launch_kernel(Triangle* buffer[2], size_t numbytes[2], Mesh meshes[2], HashTable * d_h, glm::mat4 transformation_mat[2])
+__host__ void CUDA::launch_kernel(Triangle* buffer[2], unsigned numTriangles[2], Mesh meshes[2], HashTable * d_h, glm::mat4 transformation_mat[2])
 {
-	unsigned numTriangles[2] = { numbytes[0] / sizeof(Triangle), numbytes[1] / sizeof(Triangle) };
 	unsigned totalTriangles = numTriangles[0] + numTriangles[1];
 	int threadsPerBlock = THREADS_PER_BLOCK, numBlocks = CEILDIV(totalTriangles, threadsPerBlock);
 	CUDA::triangleKernel <<< numBlocks, threadsPerBlock >>> (buffer[0], buffer[1], numTriangles[0], numTriangles[1],
@@ -208,7 +207,6 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1, unsig
 		CUDA::updateTrianglePosition(currtriangle, meshindex, d_h, transformation_mat[meshindex]);
 		buffer[triangleindex] = *currtriangle;
 
-
 		global_thread_id += gridDim.x * blockDim.x;
 	}
 }
@@ -220,12 +218,36 @@ void OpenGLScene::runCuda()
 	gpuErrchk(cudaGraphicsMapResources(2, vbo_resource));
 
 	size_t num_bytes[2];
+	unsigned numTriangles[2];
 	for (int i = 0; i < 2; ++i) {
 		gpuErrchk(cudaGraphicsResourceGetMappedPointer((void**)(dptr + i), num_bytes + i, vbo_resource[i]));
+		if (num_bytes[i] != this->meshes[i].numTriangles * sizeof(Triangle)) {
+			std::cerr << "VBO " << i << " not initialized properly, no. of bytes in VBO found after mapping to CUDA = "
+				<< num_bytes[i] << " and no. of bytes of triangles in mesh = " << this->meshes[i].numTriangles * sizeof(Triangle)
+				<< std::endl;
+			assert(num_bytes[i] == this->meshes[i].numTriangles * sizeof(Triangle));
+			return;
+		}
+		else {
+			numTriangles[i] = num_bytes[i] / sizeof(Triangle);
+		}
 	}
-	CUDA::launch_kernel(dptr, num_bytes, this->meshes, this->d_h, this->isFirstFrame ? this->init_model_mat : this->trans_model_mat);
-	this->collided = CUDA::detectCollision(this->meshes, this->d_h);
-	
+
+	auto model_mat = this->trans_model_mat;
+	if (this->isFirstFrame) {
+		model_mat = this->init_model_mat;
+	}
+	else if (this->collided) {
+		model_mat = this->identity_model_mat;
+	}
+
+	CUDA::launch_kernel(dptr, numTriangles, this->meshes, this->d_h, model_mat);
+
+	if (!this->collided) {
+		collisionMarker::init(this->meshes);
+		this->collided = CUDA::detectCollision(this->meshes, this->d_h);
+	}
+
 	// unmap buffer object
 	gpuErrchk(cudaGraphicsUnmapResources(2, vbo_resource));
 	this->isFirstFrame = false;
@@ -233,18 +255,28 @@ void OpenGLScene::runCuda()
 
 OpenGLScene::OpenGLScene(Mesh h_meshes[2], glm::mat4 init_model_mat[2], glm::mat4 trans_model_mat[2], HashTable * d_h) {
 	for (int i = 0; i < 2; ++i) {
+		for (int t = 0; t < h_meshes[i].numTriangles; ++t) {
+			for (int v = 0; v < 3; ++v) {
+				h_meshes[i].triangles[t].vertices[v].hasCollided = 0.0f;	//All meshes will be uncollided initially
+			}
+		}
 		meshes[i].numTriangles = h_meshes[i].numTriangles;
 		gpuErrchk(cudaMalloc((void**)&meshes[i].triangles, meshes[i].numTriangles * sizeof(Triangle)));
 		gpuErrchk(cudaMemcpy(meshes[i].triangles, h_meshes[i].triangles, meshes[i].numTriangles * sizeof(Triangle), cudaMemcpyDefault));
 	}
 
+	glm::mat4 identity_model_mat[2] = { glm::mat4(1.0f), glm::mat4(1.0f) };
+
 	gpuErrchk(cudaMalloc((void**)&(this->init_model_mat), 2 * sizeof(glm::mat4)));
 	gpuErrchk(cudaMalloc((void**)&(this->trans_model_mat), 2 * sizeof(glm::mat4)));
+	gpuErrchk(cudaMalloc((void**)&(this->identity_model_mat), 2 * sizeof(glm::mat4)));
 	gpuErrchk(cudaMemcpy(this->init_model_mat, init_model_mat, 2 * sizeof(glm::mat4), cudaMemcpyDefault));
 	gpuErrchk(cudaMemcpy(this->trans_model_mat, trans_model_mat, 2 * sizeof(glm::mat4), cudaMemcpyDefault));
+	gpuErrchk(cudaMemcpy(this->identity_model_mat, identity_model_mat, 2 * sizeof(glm::mat4), cudaMemcpyDefault));
 
 	this->d_h = d_h;
 	this->isFirstFrame = true;
+	this->collided = false;
 }
 
 namespace {
@@ -289,6 +321,9 @@ void OpenGLScene::prepdraw()
 		// normal attribute
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 		glEnableVertexAttribArray(1);
+		// collided attribute
+		glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, hasCollided));
+		glEnableVertexAttribArray(2);
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -348,7 +383,8 @@ int OpenGLScene::render() {
 
 	Shader sh("render/Shaders/shader.vs", "render/Shaders/shader.fs");
 	sh.use();
-	sh.set3fv("objectColor", 1.0f, 0.5f, 0.31f);
+	sh.set3fv("objectColor", 1.0f, 0.5f, 0.31f);		// Coral
+	sh.set3fv("collidedColor", 0.698f, 0.133f, 0.133f);	// FireBrick
 	sh.set3fv("lightColor", 1.0f, 1.0f, 1.0f);
 	sh.set3fv("lightPos", lightPos.x, lightPos.y, lightPos.z);
 

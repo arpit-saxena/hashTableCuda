@@ -1,10 +1,12 @@
 #version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
+layout (location = 2) in float aCollided;
 
 out vec3 Normal;
 out vec3 FragPos;
 out vec3 vlightPos;
+out float Collided;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -17,4 +19,5 @@ void main()
 	Normal = mat3(view * model) * aNormal; // Assuming non-uniform scaling in different directions is not done
 	FragPos = vec3(view * model * vec4(aPos, 1.0));
 	vlightPos = vec3(view * vec4(lightPos, 1.0));
+	Collided = aCollided;
 }
