@@ -1,7 +1,7 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include <glad\glad.h>
+#include <glad/glad.h>
 #include <shader_s.h>
 
 #include "SlabHash/HashTable.cuh"
