@@ -1,8 +1,8 @@
 #ifndef COLLISIONDET_CUH
 #define COLLISIONDET_CUH
 
-#include "SlabHash/HashTable.cuh"
-#include "SlabHash/Importer.h"
+#include "HashTable.cuh"
+#include "Importer.cuh"
 
 struct Voxel {
     // from LSB: first 10 bits are x index, middle 10 bits are y index, last 10 bits are z
