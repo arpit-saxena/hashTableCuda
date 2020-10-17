@@ -1,5 +1,5 @@
 #include <assert.h>
-#include "SlabHash/CollisionDet.cuh"
+#include "SlabHash/CollisionDetInternals.cuh"
 
 // trans_mat[i] is transformation matrix of mesh i
 __constant__ float trans_mat[2][4][4];

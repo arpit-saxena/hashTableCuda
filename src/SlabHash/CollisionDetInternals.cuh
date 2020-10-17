@@ -1,5 +1,5 @@
-#ifndef COLLISIONDET_CUH
-#define COLLISIONDET_CUH
+#ifndef COLLISIONDETINTERNALS_CUH
+#define COLLISIONDETINTERNALS_CUH
 
 #include "HashTable.cuh"
 #include "Importer.cuh"
@@ -37,4 +37,4 @@ __global__ void updateHashTable(Mesh *m, int mesh_i);
 __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box);
 __global__ void markCollidingTriangles();
 
-#endif /* COLLISIONDET_CUH */
+#endif /* COLLISIONDETINTERNALS_CUH */
