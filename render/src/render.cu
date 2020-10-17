@@ -204,7 +204,7 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1, unsig
 		}
 		__syncwarp();
 		Triangle * currtriangle = mesh + triangleindex;
-		CUDA::updateTrianglePosition(currtriangle, meshindex, d_h, transformation_mat[meshindex]);
+		CUDA::updateTrianglePosition(currtriangle, triangleindex, meshindex, d_h, transformation_mat[meshindex]);
 		buffer[triangleindex] = *currtriangle;
 
 		global_thread_id += gridDim.x * blockDim.x;
@@ -241,6 +241,7 @@ void OpenGLScene::runCuda()
 		model_mat = this->identity_model_mat;
 	}
 
+	CUDA::preprocess(model_mat);
 	CUDA::launch_kernel(dptr, numTriangles, this->meshes, this->d_h, model_mat);
 
 	if (!this->collided) {

@@ -69,7 +69,7 @@ namespace CUDA {
 	* d_h is a device pointer pointing to the hashtable stored in device memory
 	* NOTE: needs full warp
 	*/
-	__device__ void updateTrianglePosition(Triangle * currtriangle, int meshIndex, HashTable * d_h, const glm::mat4 transformation_mat);
+	__device__ void updateTrianglePosition(Triangle * currtriangle, int triangleIndex, int meshIndex, HashTable * d_h, const glm::mat4 transformation_mat);
 	/*
 	* Called in runCuda() after the call to launch_kernel(), to do further processing on all updated triangles
 	* Intended to use the updated hashtable to do collision detection
@@ -77,6 +77,14 @@ namespace CUDA {
 	* d_h is a device pointer pointing to the hashtable stored in device memory
 	*/
 	__host__ bool detectCollision(Mesh * d_meshes, HashTable * d_h);
+
+	/*
+	* Callend in runCuda() before launch_kernel()
+	* Allows for associated data structures to be updated whose update is simple such
+	* as transforming a bounding box. Having a kernel do that is a waste
+	* Can also do other pre processing
+	*/
+	__host__ void preprocess(const glm::mat4 transformation_mat);
 
 	__host__ void launch_kernel(Triangle* buffer[2], unsigned numTriangles[2], Mesh meshes[2], 
 		HashTable* d_h, glm::mat4 transformation_mat[2]);
@@ -90,7 +98,7 @@ namespace CUDA {
 namespace collisionMarker {
 	extern __constant__ Triangle* d_meshes[2];
 	__host__ void init(Mesh meshes[2]);
-	__device__ void markCollision(int, int);
+	__device__ void markCollision(uint32_t, uint32_t);
 }
 
 #endif // !RENDER_H

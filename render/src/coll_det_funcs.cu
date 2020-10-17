@@ -1,4 +1,5 @@
 #include "render.cuh"
+#include "SlabHash/CollisionDetInternals.cuh"
 
 __global__ void testmarking() {
 	int global_thread_id = blockDim.x * blockIdx.x + threadIdx.x;
@@ -9,19 +10,32 @@ __global__ void testmarking() {
 	}
 }
 
+__host__ void CUDA::preprocess(const glm::mat4 trans_mat) {
+	transformaAndResetBox(trans_mat);
+}
+
 __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
 	static int frame = 0;
-	if (frame++ > 120) {
+	/* if (frame++ > 120) {
 		int threadsPerBlock = THREADS_PER_BLOCK, numBlocks = 64;
 		testmarking<<<numBlocks, threadsPerBlock>>>();
 		return true;
-	}
+	} */ // !< Hope this was just testing and 120 isn't sth important
+
+	int threadsPerBlock = THREADS_PER_BLOCK, numBlocks = 128; //FIXME: Change this >.<
+	markCollidingTriangles<<<numBlocks, threadsPerBlock>>>();
+	gpuErrchk( cudaDeviceSynchronize() );
 	bool collisionHappened = false;
 	return collisionHappened;
 }
 
-__device__ void CUDA::updateTrianglePosition(Triangle* currtriangle, int meshIndex, HashTable* d_h, const glm::mat4 transformation_mat) {
-	transform(currtriangle, transformation_mat);
+__device__ void CUDA::updateTrianglePosition(Triangle* triangle, int triangleIndex, int meshIndex, HashTable* d_h, const glm::mat4 transformationMat) {
+	Voxel oldVoxel = getVoxel(triangle);
+	transform(triangle, transformationMat);
+	Voxel newVoxel = getVoxel(triangle);
+
+	updateHashTable(triangleIndex, meshIndex, oldVoxel, newVoxel);
+	if (meshIndex == 0) updateBoundingBox(triangle); // FIXME: DIVERGENCE!
 }
 
 __constant__ Triangle* collisionMarker::d_meshes[2] = { nullptr, nullptr };
@@ -32,7 +46,7 @@ __host__ void collisionMarker::init(Mesh meshes[2]) {
 	}
 }
 
-__device__ void collisionMarker::markCollision(int voxel, int triangle_i)
+__device__ void collisionMarker::markCollision(uint32_t voxel, uint32_t triangle_i)
 {
 	Triangle* t = d_meshes[1] + triangle_i;
 	for (int i = 0; i < 3; ++i) {

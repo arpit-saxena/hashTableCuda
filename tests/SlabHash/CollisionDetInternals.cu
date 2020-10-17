@@ -1,5 +1,6 @@
 #include <assert.h>
 #include "SlabHash/CollisionDetInternals.cuh"
+#include "render.cuh"
 
 // trans_mat[i] is transformation matrix of mesh i
 __constant__ float trans_mat[2][4][4];
@@ -18,7 +19,7 @@ __device__ Voxel getVoxel(Triangle *t) {
 	for (int i = 0; i < 3; i++) {
 		centroid[i] = 0.0f;
 		for (int j = 0; j < 3; j++) {
-			centroid[i] += t->vertices[j][i];
+			centroid[i] += t->vertices[j].point[i];
 		}
 		centroid[i] /= 3.0;
 	}
@@ -53,7 +54,7 @@ __device__ void updatePosition(Triangle *t, int mesh_i) {
 	memcpy(t, &t2, sizeof(Triangle));
 }
 
-__device__ __host__ void updatePositionVertex(float vertex[3], float trans_mat[4][4]) {
+__device__ __host__ void updatePositionVertex(float vertex[3], const glm::mat4 trans_mat) {
 	for (int i = 0; i < 3; i++) {
 		float ans = 0.0f;
 		for (int j = 0; j < 3; j++) {
@@ -64,7 +65,7 @@ __device__ __host__ void updatePositionVertex(float vertex[3], float trans_mat[4
 	}
 }
 
-__global__ void updateHashTable(Mesh *m, int mesh_i) {
+/* __global__ void updateHashTable(Mesh *m, int mesh_i) {
 	// FIXME: Assuming enough threads are available
 	uint32_t triangle_i = blockDim.x * blockIdx.x + threadIdx.x;
 	Triangle *t;
@@ -82,9 +83,19 @@ __global__ void updateHashTable(Mesh *m, int mesh_i) {
 	const bool is_active = triangle_i < m->numTriangles && oldVoxel != newVoxel;
 	op.run(Instruction::Type::Delete, oldVoxel.index, triangle_i, is_active);
 	op.run(Instruction::Type::Insert, newVoxel.index, triangle_i, is_active);
+} */
+
+__device__ updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel, Voxel newVoxel) {
+    ResidentBlock rb;
+    HashTableOperation op(&table, &rb);
+    bool is_active = meshIndex == 1 && oldVoxel != newVoxel;
+    // ^ meshIndex == 1 is since a warp may have triangles from the other mesh too
+    
+    op.run(Instruction::Type::Delete, oldVoxel.index, triangle_i, is_active);
+	op.run(Instruction::Type::Insert, newVoxel.index, triangle_i, is_active);
 }
 
-// Assumes bounding box array has already been reset, and position updated
+/* // Assumes bounding box array has already been reset, and position updated
 __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box) {
 	// FIXME: Assuming enough threads are available
 	uint32_t triangle_i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -94,23 +105,58 @@ __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box) {
 		Voxel v = getVoxel(t);
 		box->setOccupied(Voxel v);
 	}
+} */
+
+// Assumes bounding box array has already been reset, and position updated
+__device__ void updateBoundingBox(Triangle *t) {
+    Voxel v = getVoxel(t);
+    box->setOccupied(v);
 }
 
-__device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i) {
+/* __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i) {
 	//TODO
-}
+} */
 
-__global__ void markCollidingTriangles(BoundingBox *box, HashTable *h) {
+__global__ void markCollidingTriangles() {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	int z = blockIdx.z * blockDim.z + threadIdx.z;
 	
-	
+	for (; x < box.size[0]; x += gridDim.x * blockDim.x) {
+        for (; y < box.size[1]; y += gridDim.y * blockDim.y) {
+            for (; z < box.size[2] * 32; z += gridDim.z * blockDim.z) {
+                uint32_t isOccupied = box[x][y][z / 32];
+                ResidentBlock rb;
+                HashTableOperation op(&table, &rb);
+
+                // For each set bit in isOccupied, we have an associated voxel in which 
+                // a triangle of mesh 1 resides. For each search voxel, we wish to find
+                // all triangles of mesh 0 by searching the hash table
+
+                for (int i = 0; i < 32; i++) {
+                    bool is_active = isOccupied & (1 << (32 - i));
+                    if (!is_active) continue; //< No divergence since all lanes have same is_active
+                    float voxelMidpoint[3];
+                    for (int i = 0; i < 3; i++) {
+                        voxelMidpoint[i] = box.start_vertex[i] + Voxel::SIZE / 2;
+                    }
+
+                    voxelMidpoint[0] += x * Voxel::SIZE;
+                    voxelMidpoint[1] += y * Voxel::SIZE;
+                    voxelMidpoint[2] += (z - z % 32) * Voxel::SIZE + i;
+
+                    uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
+
+                    table.findvalue(voxelIndex, collisionMarker::markCollision);
+                }
+            }
+        }
+    }
 }
 
-void transformAndResetBox(float trans_mat[4][4], BoundingBox *d_box) {
+__host__ void transformAndResetBox(const glm::mat4 trans_mat) {
 	BoundingBox h_box;
-	gpuErrchk( cudaMemcpy(&h_box, d_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpy(&h_box, &box, sizeof(BoundingBox), cudaMemcpyDefault) );
 	updatePositionVertex(h_box.start_vertex, trans_mat);
 	updatePositionVertex(h_box.end_vertex, trans_mat);
 
@@ -125,12 +171,5 @@ void transformAndResetBox(float trans_mat[4][4], BoundingBox *d_box) {
 	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
 	gpuErrchk ( cudaMemset(h_box.occupied, 0, totalCapacity * sizeof(uint32_t)) );
 
-	gpuErrchk( cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
-}
-
-void nextFrame(float h_trans_mat[2][4][4], HashTable *d_h, BoundingBox *d_box, Mesh *d_mesh[2], int numTriangles[2]) {
-	transformAndResetBox(h_trans_mat[0], d_box);
-	updateBoundingBox<<<CEILDIV(numTriangles[0], THREADS_PER_BLOCK), THREADS_PER_BLOCK>>>(d_mesh[0], 0, d_box);
-	updateHashTable<<<CEILDIV(numTriangles[1], THREADS_PER_BLOCK), THREADS_PER_BLOCK>>>(d_mesh[1], 1);
-
+	gpuErrchk( cudaMemcpy(&box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
 }
