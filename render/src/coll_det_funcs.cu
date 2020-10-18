@@ -10,6 +10,12 @@ __global__ void testmarking() {
 	}
 }
 
+__host__ void CUDA::initCollisionDet(Mesh meshes[2]) {
+	initBoundingBox(meshes[0]);
+	initHashTable(2000); //TODO: Base this on number of triangles
+}
+
+
 __host__ void CUDA::preprocess(const glm::mat4 trans_mats[2]) {
 	transformAndResetBox(trans_mats[0]);
 }

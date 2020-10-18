@@ -79,12 +79,19 @@ namespace CUDA {
 	__host__ bool detectCollision(Mesh * d_meshes, HashTable * d_h);
 
 	/*
-	* Callend in runCuda() before launch_kernel()
+	* Called in runCuda() before launch_kernel()
 	* Allows for associated data structures to be updated whose update is simple such
 	* as transforming a bounding box. Having a kernel do that is a waste
 	* Can also do other pre processing
 	*/
-	__host__ void preprocess(const glm::mat4 transformation_mat);
+	__host__ void preprocess(const glm::mat4 transformation_mat[2]);
+
+	/*
+	* Called just before entering into the render loop
+	* Initialise the data structures associated with collision detection, and any
+	* other things which need only be done once
+	*/
+	__host__ void initCollisionDet(Mesh meshes[2]);
 
 	__host__ void launch_kernel(Triangle* buffer[2], unsigned numTriangles[2], Mesh meshes[2], 
 		HashTable* d_h, glm::mat4 transformation_mat[2]);

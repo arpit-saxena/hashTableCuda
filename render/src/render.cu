@@ -408,6 +408,8 @@ int OpenGLScene::render() {
 	const double step = 0.1;
 	int nbFrames = 0;
 
+	CUDA::initCollisionDet(this->meshes);
+
 	while (!glfwWindowShouldClose(window))
 	{
 		double currentTime = glfwGetTime();

@@ -156,19 +156,19 @@ __device__ __forceinline__ void HashTableOperation::deleter(uint32_t s_read_data
 __host__ __device__ void HashTable::findvalues(uint32_t * d_keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value), cudaStream_t stream) {
 	unsigned no_of_threads = no_of_keys * 32;
 	int threads_per_block = THREADS_PER_BLOCK, blocks = CEILDIV(no_of_threads, threads_per_block);
-	utilitykernel::findvalueskernel<<<blocks, threads_per_block, 0, stream>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback);
+	utilitykernel::findvalueskernel<<<blocks, threads_per_block, 0, stream>>>(d_keys, no_of_keys, base_slabs, no_of_buckets, callback, this);
 }
 
 // If some warp divergence bullshit crops up, rewrite this function to have 1 lane
 // do all the collation of the found values into an array
 __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
-								unsigned no_of_buckets,	void (*callback)(uint32_t key, uint32_t value)) {
+								unsigned no_of_buckets,	void (*callback)(uint32_t key, uint32_t value), HashTable *table) {
     for (int i = __global_warp_id; i < no_of_keys; i += CEILDIV(blockDim.x, warpSize)) {
-		findvalue(d_keys[__global_warp_id], callback);
+		table->findvalue(d_keys[__global_warp_id], callback);
 	}
 }
 
-__device__ __forceinline__ void HashTable::findvalue(uint32_t key, void (*callback)(uint32_t key, uint32_t value)) {
+__device__ void HashTable::findvalue(uint32_t key, void (*callback)(uint32_t key, uint32_t value)) {
 	const unsigned src_bucket = HashFunction::hash(key, no_of_buckets);
 	Address next = base_slabs[src_bucket];
 	while(next != EMPTY_ADDRESS) {

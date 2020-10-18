@@ -14,13 +14,6 @@
 
 typedef unsigned long long ULL;
 
-namespace utilitykernel {
-	__global__ void init_table(int, Address *);
-	__global__ void findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, 
-		Address* base_slabs, unsigned no_of_buckets,
-		void (*callback)(uint32_t key, uint32_t value));
-}
-
 class HashTable {		// a single object of this will be made on host, and copied to global device memory
 		Address * base_slabs;
 		const unsigned no_of_buckets;
@@ -35,6 +28,14 @@ class HashTable {		// a single object of this will be made on host, and copied t
 
 		friend class HashTableOperation;
 };
+
+namespace utilitykernel {
+	__global__ void init_table(int, Address *);
+	__global__ void findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, 
+		Address* base_slabs, unsigned no_of_buckets,
+		void (*callback)(uint32_t key, uint32_t value),
+		HashTable *table);
+}
 
 struct Instruction {
 	enum Type {

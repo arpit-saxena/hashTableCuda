@@ -2,10 +2,59 @@
 #include "SlabHash/CollisionDetInternals.cuh"
 #include "render.cuh"
 
-#define NUM_BUCKETS 1000
+__device__ BoundingBox *box;
+__device__ HashTable *table;
 
-__device__ BoundingBox box;
-__device__ HashTable table(1000);
+__host__ void initHashTable(int numBuckets) {
+	HashTable *h_table = new HashTable(numBuckets);
+	gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
+	gpuErrchk( cudaMemcpy(table, h_table, sizeof(HashTable), cudaMemcpyDefault) );
+}
+
+// mesh object is in host memory but it's triangles array is stored device memory
+__host__ void initBoundingBox(Mesh mesh) {
+	Triangle *h_triangles = (Triangle *) malloc(mesh.numTriangles * sizeof(Triangle));
+	gpuErrchk( cudaMemcpy(h_triangles, mesh.triangles, mesh.numTriangles * sizeof(Triangle), cudaMemcpyDefault) );
+
+	// If this is a bottleneck, look into GPU based algo for finding minimum
+	// Though since this is run only once, CPU based should be fine
+	BoundingBox h_box;
+
+	for (int i = 0; i < 3; i++) {
+		h_box.start_vertex[i] = h_triangles[0].vertices[0].point[i];
+		h_box.end_vertex[i] = h_triangles[0].vertices[0].point[i];
+	}
+
+	for (int i = 0; i < mesh.numTriangles; i++) {
+		for (int j = 0; j < 3; j++) {
+			for (int k = 0; k < 3; k++) {
+				if (h_triangles[i].vertices[j].point[k] < h_box.start_vertex[k]) {
+					h_box.start_vertex[k] = h_triangles[i].vertices[j].point[k];
+				}
+
+				if (h_triangles[i].vertices[j].point[k] > h_box.end_vertex[k]) {
+					h_box.end_vertex[k] = h_triangles[i].vertices[j].point[k];
+				}
+			}
+		}
+	}
+
+	h_box.start_i = getVoxel(h_box.start_vertex).index;
+	
+	for (int i = 0; i < 3; i++) {
+		h_box.size[i] = ceil(h_box.end_vertex[i] - h_box.start_vertex[i] / Voxel::SIZE);
+		h_box.capacity[i] = h_box.size[i] + 2; 
+		// ^Only need +1 but I'm scared of floating point errors wrecking stuff up
+	}
+
+	h_box.size[2] = CEILDIV(h_box.size[2], 32);
+	h_box.capacity[2] = h_box.size[2] + 2;
+
+	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
+	gpuErrchk( cudaMalloc(&h_box.occupied, totalCapacity) );
+
+	gpuErrchk( cudaMemcpy(box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+}
 
 __device__ void BoundingBox::setOccupied(Voxel v) {
 	// Assuming indices are within bounds
@@ -14,7 +63,11 @@ __device__ void BoundingBox::setOccupied(Voxel v) {
 	int y = ((v.index >> 10) & mask) - ((start_i >> 10) & mask);
 	int z = ((v.index >> 20) & mask) - ((start_i >> 20) & mask);
 	// TODO: Can we just do v.index - start_i?
-	occupied[x][y][z / 32] |= 1u << (z % 32);
+	occupied[(x * size[0] + y) * size[1] + z / 32] |= 1u << (z % 32);
+}
+
+__device__ uint32_t BoundingBox::getOccupied(int x, int y, int z) {
+	return occupied[(x * size[0] + y) * size[1] + z / 32];
 }
 
 // Gets a voxel of a triangle.
@@ -91,7 +144,7 @@ __device__ __host__ void updatePositionVertex(float vertex[3], const glm::mat4 t
 
 __device__ void updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel, Voxel newVoxel) {
     ResidentBlock rb;
-    HashTableOperation op(&table, &rb);
+    HashTableOperation op(table, &rb);
     bool is_active = meshIndex == 1 && oldVoxel.index != newVoxel.index;
     // ^ meshIndex == 1 is since a warp may have triangles from the other mesh too
     
@@ -114,7 +167,7 @@ __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box) {
 // Assumes bounding box array has already been reset, and position updated
 __device__ void updateBoundingBox(Triangle *t) {
     Voxel v = getVoxel(t);
-    box.setOccupied(v);
+    box->setOccupied(v);
 }
 
 /* __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i) {
@@ -126,23 +179,23 @@ __global__ void markCollidingTriangles() {
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	int z = blockIdx.z * blockDim.z + threadIdx.z;
 	
-	for (; x < box.size[0]; x += gridDim.x * blockDim.x) {
-        for (; y < box.size[1]; y += gridDim.y * blockDim.y) {
-            for (; z < box.size[2] * 32; z += gridDim.z * blockDim.z) {
-                uint32_t isOccupied = box.occupied[x][y][z / 32];
+	for (; x < box->size[0]; x += gridDim.x * blockDim.x) {
+        for (; y < box->size[1]; y += gridDim.y * blockDim.y) {
+            for (; z < box->size[2] * 32; z += gridDim.z * blockDim.z) {
+                uint32_t isOccupied = box->getOccupied(x, y, z);
                 ResidentBlock rb;
-                HashTableOperation op(&table, &rb);
+                HashTableOperation op(table, &rb);
 
                 // For each set bit in isOccupied, we have an associated voxel in which 
-                // a triangle of mesh 1 resides. For each search voxel, we wish to find
-                // all triangles of mesh 0 by searching the hash table
+                // a triangle of mesh 0 resides. For each search voxel, we wish to find
+                // all triangles of mesh 1 by searching the hash table
 
                 for (int i = 0; i < 32; i++) {
                     bool is_active = isOccupied & (1 << (32 - i));
                     if (!is_active) continue; //< No divergence since all lanes have same is_active
                     float voxelMidpoint[3];
                     for (int j = 0; j < 3; j++) {
-                        voxelMidpoint[j] = box.start_vertex[j] + Voxel::SIZE / 2;
+                        voxelMidpoint[j] = box->start_vertex[j] + Voxel::SIZE / 2;
                     }
 
                     voxelMidpoint[0] += x * Voxel::SIZE;
@@ -151,7 +204,7 @@ __global__ void markCollidingTriangles() {
 
                     uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
 
-                    table.findvalue(voxelIndex, collisionMarker::markCollision);
+                    table->findvalue(voxelIndex, collisionMarker::markCollision);
                 }
             }
         }
@@ -160,7 +213,7 @@ __global__ void markCollidingTriangles() {
 
 __host__ void transformAndResetBox(const glm::mat4 trans_mat) {
 	BoundingBox h_box;
-	gpuErrchk( cudaMemcpy(&h_box, &box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpy(&h_box, box, sizeof(BoundingBox), cudaMemcpyDefault) );
 	updatePositionVertex(h_box.start_vertex, trans_mat);
 	updatePositionVertex(h_box.end_vertex, trans_mat);
 
@@ -175,5 +228,5 @@ __host__ void transformAndResetBox(const glm::mat4 trans_mat) {
 	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
 	gpuErrchk ( cudaMemset(h_box.occupied, 0, totalCapacity * sizeof(uint32_t)) );
 
-	gpuErrchk( cudaMemcpy(&box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpy(box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
 }

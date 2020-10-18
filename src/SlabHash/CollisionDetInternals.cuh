@@ -21,10 +21,14 @@ struct BoundingBox {
     uint32_t start_i;
     uint32_t size[3];
     uint32_t capacity[3];
-    uint32_t ***occupied;
+    uint32_t *occupied;
 
     __device__ void setOccupied(Voxel v);
+    __device__ uint32_t getOccupied(int x, int y, int z);
 };
+
+__host__ void initHashTable(int numBuckets);
+__host__ void initBoundingBox(Mesh mesh);
 
 __device__ Voxel getVoxel(Triangle *t);
 __device__ __host__ Voxel getVoxel(float v[3]);
