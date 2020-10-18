@@ -6,9 +6,12 @@ __device__ BoundingBox *box;
 __device__ HashTable *table;
 
 __host__ void initHashTable(int numBuckets) {
+	SlabAlloc::init();
 	HashTable *h_table = new HashTable(numBuckets);
-	gpuErrchk( cudaMalloc(&table, sizeof(HashTable)) );
-	gpuErrchk( cudaMemcpy(table, h_table, sizeof(HashTable), cudaMemcpyDefault) );
+	HashTable *d_table;
+	gpuErrchk( cudaMalloc(&d_table, sizeof(HashTable)) );
+	gpuErrchk( cudaMemcpy(d_table, h_table, sizeof(HashTable), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpyToSymbol(table, &d_table, sizeof(HashTable *)) );
 }
 
 // mesh object is in host memory but it's triangles array is stored device memory
@@ -51,9 +54,12 @@ __host__ void initBoundingBox(Mesh mesh) {
 	h_box.capacity[2] = h_box.size[2] + 2;
 
 	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
-	gpuErrchk( cudaMalloc(&h_box.occupied, totalCapacity) );
+	gpuErrchk( cudaMalloc(&h_box.occupied, totalCapacity * sizeof(uint32_t)) );
 
-	gpuErrchk( cudaMemcpy(box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	BoundingBox *d_box;
+	gpuErrchk( cudaMalloc(&d_box, sizeof(BoundingBox)) );
+	gpuErrchk( cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)) );
 }
 
 __device__ void BoundingBox::setOccupied(Voxel v) {
@@ -211,9 +217,12 @@ __global__ void markCollidingTriangles() {
     }
 }
 
-__host__ void transformAndResetBox(const glm::mat4 trans_mat) {
+__host__ void transformAndResetBox() {
+	const glm::mat4 trans_mat = CUDA::trans_mats[0];
 	BoundingBox h_box;
-	gpuErrchk( cudaMemcpy(&h_box, box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	BoundingBox *d_box;
+	gpuErrchk( cudaMemcpyFromSymbol(&d_box, box, sizeof(BoundingBox *)) );
+	gpuErrchk( cudaMemcpy(&h_box, d_box, sizeof(BoundingBox), cudaMemcpyDefault) );
 	updatePositionVertex(h_box.start_vertex, trans_mat);
 	updatePositionVertex(h_box.end_vertex, trans_mat);
 
@@ -228,5 +237,6 @@ __host__ void transformAndResetBox(const glm::mat4 trans_mat) {
 	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
 	gpuErrchk ( cudaMemset(h_box.occupied, 0, totalCapacity * sizeof(uint32_t)) );
 
-	gpuErrchk( cudaMemcpy(box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+	gpuErrchk( cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)) );
 }

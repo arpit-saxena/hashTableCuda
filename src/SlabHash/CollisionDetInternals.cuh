@@ -35,7 +35,7 @@ __device__ __host__ Voxel getVoxel(float v[3]);
 // __device__ void updatePosition(Triangle *t, int mesh_i);
 __device__ __host__ void updatePositionVertex(float vertex[3], float trans_mat[4][4]);
 __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i);
-void transformAndResetBox(const glm::mat4 trans_mat);
+void transformAndResetBox();
 
 // __global__ void updateHashTable(Mesh *m, int mesh_i);
 // __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box);

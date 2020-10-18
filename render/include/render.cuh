@@ -62,6 +62,8 @@ class OpenGLScene {
 };
 
 namespace CUDA {
+	extern glm::mat4 trans_mats[2];
+
 	/* 
 	* Called in runCuda() inside the kernel called in launch_kernel(), after the thread updates the triangle's 
 	* vertices using the transformation matrix(Intended to update the hashtable with the triangle's new voxel)
@@ -84,7 +86,7 @@ namespace CUDA {
 	* as transforming a bounding box. Having a kernel do that is a waste
 	* Can also do other pre processing
 	*/
-	__host__ void preprocess(const glm::mat4 transformation_mat[2]);
+	__host__ void preprocess();
 
 	/*
 	* Called just before entering into the render loop

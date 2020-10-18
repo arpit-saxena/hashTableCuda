@@ -16,8 +16,8 @@ __host__ void CUDA::initCollisionDet(Mesh meshes[2]) {
 }
 
 
-__host__ void CUDA::preprocess(const glm::mat4 trans_mats[2]) {
-	transformAndResetBox(trans_mats[0]);
+__host__ void CUDA::preprocess() {
+	transformAndResetBox();
 }
 
 __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
