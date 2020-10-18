@@ -40,7 +40,7 @@ FILE(GLOB_RECURSE TEST_SOURCES
 	tests/SlabHash/*.cuh
 	tests/SlabHash/*.h)
 
-set(CMAKE_CUDA_FLAGS "-gencode arch=compute_61,code=sm_61 -lineinfo -maxrregcount=32")
+set(CMAKE_CUDA_FLAGS "-gencode arch=compute_61,code=sm_61 -lineinfo -maxrregcount=32 -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored")
 add_executable(test_slab ${RENDER_SOURCES} ${TEST_SOURCES} ${SLABHASH_SOURCES})
 target_link_libraries(test_slab ${ASSIMP_LIBRARIES})
 target_link_libraries(test_slab glfw)

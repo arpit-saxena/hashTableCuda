@@ -21,8 +21,8 @@ __host__ void CUDA::preprocess(const glm::mat4 trans_mats[2]) {
 }
 
 __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
-	static int frame = 0;
-	/* if (frame++ > 120) {
+	/* static int frame = 0;
+	if (frame++ > 120) {
 		int threadsPerBlock = THREADS_PER_BLOCK, numBlocks = 64;
 		testmarking<<<numBlocks, threadsPerBlock>>>();
 		return true;
