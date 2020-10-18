@@ -10,8 +10,8 @@ __global__ void testmarking() {
 	}
 }
 
-__host__ void CUDA::preprocess(const glm::mat4 trans_mat) {
-	transformaAndResetBox(trans_mat);
+__host__ void CUDA::preprocess(const glm::mat4 trans_mats[2]) {
+	transformAndResetBox(trans_mats[0]);
 }
 
 __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {

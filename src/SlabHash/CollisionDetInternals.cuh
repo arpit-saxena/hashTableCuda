@@ -7,7 +7,7 @@
 struct Voxel {
     // from LSB: first 10 bits are x index, middle 10 bits are y index, last 10 bits are z
     uint32_t index = 0;
-    static const float SIZE = 0.5f;
+    static constexpr float SIZE = 0.5f;
 };
 
 // Bounding box is defined in terms of the starting voxel index, and the number of
@@ -28,16 +28,16 @@ struct BoundingBox {
 
 __device__ Voxel getVoxel(Triangle *t);
 __device__ __host__ Voxel getVoxel(float v[3]);
-__device__ void updatePosition(Triangle *t, int mesh_i);
-__device__ __host__ void updatePositionVertex(float vertex[3], float trans_mat[4][4])
+// __device__ void updatePosition(Triangle *t, int mesh_i);
+__device__ __host__ void updatePositionVertex(float vertex[3], float trans_mat[4][4]);
 __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i);
-void transformAndResetBox(float transMat[4][4], BoundingBox *d_box);
+void transformAndResetBox(const glm::mat4 trans_mat);
 
 // __global__ void updateHashTable(Mesh *m, int mesh_i);
 // __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box);
 __global__ void markCollidingTriangles();
 
-__device__ updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel, Voxel newVoxel);
+__device__ void updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel, Voxel newVoxel);
 __device__ void updateBoundingBox(Triangle *t);
 
 #endif /* COLLISIONDETINTERNALS_CUH */

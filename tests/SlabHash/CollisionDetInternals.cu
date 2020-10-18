@@ -2,14 +2,18 @@
 #include "SlabHash/CollisionDetInternals.cuh"
 #include "render.cuh"
 
-// trans_mat[i] is transformation matrix of mesh i
-__constant__ float trans_mat[2][4][4];
+#define NUM_BUCKETS 1000
+
+__device__ BoundingBox box;
+__device__ HashTable table(1000);
 
 __device__ void BoundingBox::setOccupied(Voxel v) {
 	// Assuming indices are within bounds
-	int x = ((v.index >> 0) & ((1u << 10) - 1)) - start_i[0];
-	int y = ((v.index >> 10) & ((1u << 10) - 1)) - start_i[1];
-	int z = ((v.index >> 20) & ((1u << 10) - 1)) - start_i[2];
+	int mask = (1u << 10) - 1;
+	int x = ((v.index >> 0) & mask) - ((start_i >> 0) & mask);
+	int y = ((v.index >> 10) & mask) - ((start_i >> 10) & mask);
+	int z = ((v.index >> 20) & mask) - ((start_i >> 20) & mask);
+	// TODO: Can we just do v.index - start_i?
 	occupied[x][y][z / 32] |= 1u << (z % 32);
 }
 
@@ -26,10 +30,10 @@ __device__ Voxel getVoxel(Triangle *t) {
 	return getVoxel(centroid);
 }
 
-__device__ __host__ Voxel getVoxel(float v[3]) {
+__device__ __host__ Voxel getVoxel(float point[3]) {
 	Voxel v;
 	for (int i = 0; i < 3; i++) {
-		uint32_t index = (int) (v[i] / Voxel::SI);
+		uint32_t index = (int) (point[i] / Voxel::SIZE);
 		assert(index < (1u << 10)); // Only 10 bits available for index
 		v.index |= index << (10 * i);
 	}
@@ -37,7 +41,7 @@ __device__ __host__ Voxel getVoxel(float v[3]) {
 }
 
 // This works for translation matrices. Not sure if it will work for rotation matrices
-__device__ void updatePosition(Triangle *t, int mesh_i) {
+/* __device__ void updatePosition(Triangle *t, int mesh_i) {
 	// Maybe this can be improved, but its a really small matrix
 	Triangle t2;
 	for (int vertex_i = 0; vertex_i < 3; vertex_i++) {
@@ -52,7 +56,7 @@ __device__ void updatePosition(Triangle *t, int mesh_i) {
 	}
 	
 	memcpy(t, &t2, sizeof(Triangle));
-}
+} */
 
 __device__ __host__ void updatePositionVertex(float vertex[3], const glm::mat4 trans_mat) {
 	for (int i = 0; i < 3; i++) {
@@ -85,14 +89,14 @@ __device__ __host__ void updatePositionVertex(float vertex[3], const glm::mat4 t
 	op.run(Instruction::Type::Insert, newVoxel.index, triangle_i, is_active);
 } */
 
-__device__ updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel, Voxel newVoxel) {
+__device__ void updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel, Voxel newVoxel) {
     ResidentBlock rb;
     HashTableOperation op(&table, &rb);
-    bool is_active = meshIndex == 1 && oldVoxel != newVoxel;
+    bool is_active = meshIndex == 1 && oldVoxel.index != newVoxel.index;
     // ^ meshIndex == 1 is since a warp may have triangles from the other mesh too
     
-    op.run(Instruction::Type::Delete, oldVoxel.index, triangle_i, is_active);
-	op.run(Instruction::Type::Insert, newVoxel.index, triangle_i, is_active);
+    op.run(Instruction::Type::Delete, oldVoxel.index, triangleIndex, is_active);
+	op.run(Instruction::Type::Insert, newVoxel.index, triangleIndex, is_active);
 }
 
 /* // Assumes bounding box array has already been reset, and position updated
@@ -110,7 +114,7 @@ __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box) {
 // Assumes bounding box array has already been reset, and position updated
 __device__ void updateBoundingBox(Triangle *t) {
     Voxel v = getVoxel(t);
-    box->setOccupied(v);
+    box.setOccupied(v);
 }
 
 /* __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i) {
@@ -125,7 +129,7 @@ __global__ void markCollidingTriangles() {
 	for (; x < box.size[0]; x += gridDim.x * blockDim.x) {
         for (; y < box.size[1]; y += gridDim.y * blockDim.y) {
             for (; z < box.size[2] * 32; z += gridDim.z * blockDim.z) {
-                uint32_t isOccupied = box[x][y][z / 32];
+                uint32_t isOccupied = box.occupied[x][y][z / 32];
                 ResidentBlock rb;
                 HashTableOperation op(&table, &rb);
 
@@ -137,8 +141,8 @@ __global__ void markCollidingTriangles() {
                     bool is_active = isOccupied & (1 << (32 - i));
                     if (!is_active) continue; //< No divergence since all lanes have same is_active
                     float voxelMidpoint[3];
-                    for (int i = 0; i < 3; i++) {
-                        voxelMidpoint[i] = box.start_vertex[i] + Voxel::SIZE / 2;
+                    for (int j = 0; j < 3; j++) {
+                        voxelMidpoint[j] = box.start_vertex[j] + Voxel::SIZE / 2;
                     }
 
                     voxelMidpoint[0] += x * Voxel::SIZE;
@@ -163,7 +167,7 @@ __host__ void transformAndResetBox(const glm::mat4 trans_mat) {
 	h_box.start_i = getVoxel(h_box.start_vertex).index;
 	uint32_t end_i = getVoxel(h_box.end_vertex).index;
 	for (int i = 0; i < 3; i++) {
-		uint32_t beg = (h_box.start_i >> 10 * i) & ((1u << 10) - 1);
+		uint32_t begin = (h_box.start_i >> 10 * i) & ((1u << 10) - 1);
 		uint32_t end = (end_i >> 10 * i) & ((1u << 10) - 1);
 		h_box.size[i] = end - begin;
 	}
