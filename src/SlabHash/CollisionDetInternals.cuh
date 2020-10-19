@@ -7,7 +7,7 @@
 struct Voxel {
     // from LSB: first 10 bits are x index, middle 10 bits are y index, last 10 bits are z
     uint32_t index = 0;
-    static constexpr float SIZE = 0.5f;
+    static constexpr float SIZE = 2.0f / (1 << 10);
 };
 
 // Bounding box is defined in terms of the starting voxel index, and the number of

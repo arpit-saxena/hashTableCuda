@@ -92,8 +92,9 @@ __device__ Voxel getVoxel(Triangle *t) {
 __device__ __host__ Voxel getVoxel(float point[3]) {
 	Voxel v;
 	for (int i = 0; i < 3; i++) {
-		uint32_t index = (int) (point[i] / Voxel::SIZE);
-		assert(index < (1u << 10)); // Only 10 bits available for index
+		assert(point[i] > -1 && point[i] < 1);
+		uint32_t index = (int) ((point[i] + 1.0)/ Voxel::SIZE);
+		assert(index < (1u << 10) && index > 0); // Only 10 bits available for index
 		v.index |= index << (10 * i);
 	}
 	return v;
