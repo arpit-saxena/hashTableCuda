@@ -185,12 +185,13 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1, unsig
 	Triangle * mesh0, Triangle * mesh1, HashTable* d_h, glm::mat4 * transformation_mat)
 {
 	const unsigned totalTriangles = numTriangles0 + numTriangles1;
+	const unsigned maxThreadsToRun = CEILDIV(totalTriangles, warpSize) * warpSize;
 	Triangle* buffer = nullptr;
 	Triangle* mesh = nullptr;
 	int meshindex = -1;
 
 	int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
-	while (global_thread_id < totalTriangles) {
+	while (global_thread_id < maxThreadsToRun) {
 		unsigned triangleindex;
 		if (global_thread_id < numTriangles0) {
 			buffer = buffer0;
@@ -198,16 +199,28 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1, unsig
 			meshindex = 0;
 			triangleindex = global_thread_id;
 		}
-		else {
+		else if(global_thread_id < totalTriangles) {
 			buffer = buffer1;
 			mesh = mesh1;
 			meshindex = 1;
 			triangleindex = global_thread_id - numTriangles0;
 		}
+		else {		// This is an invalid thread, all the triangles have already been assigned to previous threads
+					// This thread just needs to run for the warp-cooperative HashTable functions
+			buffer = mesh = nullptr;
+			triangleindex = 0;
+			meshindex = 2;
+		}
 		__syncwarp();
-		Triangle * currtriangle = mesh + triangleindex;
+		assert(__activemask() == WARP_MASK);
+		Triangle* currtriangle = nullptr;
+		if (meshindex <= 1) {
+			currtriangle = mesh + triangleindex;
+		}
 		CUDA::updateTrianglePosition(currtriangle, triangleindex, meshindex, d_h, transformation_mat[meshindex]);
-		buffer[triangleindex] = *currtriangle;
+		if (meshindex <= 1) {
+			buffer[triangleindex] = *currtriangle;
+		}
 
 		global_thread_id += gridDim.x * blockDim.x;
 	}

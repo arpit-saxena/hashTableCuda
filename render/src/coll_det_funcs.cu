@@ -36,9 +36,12 @@ __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
 }
 
 __device__ void CUDA::updateTrianglePosition(Triangle* triangle, int triangleIndex, int meshIndex, HashTable* d_h, const glm::mat4 transformationMat) {
-	Voxel oldVoxel = getVoxel(triangle);
-	transform(triangle, transformationMat);
-	Voxel newVoxel = getVoxel(triangle);
+	Voxel oldVoxel, newVoxel;
+	if (triangle != nullptr) {
+		oldVoxel = getVoxel(triangle);
+		transform(triangle, transformationMat);
+		newVoxel = getVoxel(triangle);
+	}
 
 	updateHashTable(triangleIndex, meshIndex, oldVoxel, newVoxel);
 	if (meshIndex == 0) updateBoundingBox(triangle); // FIXME: DIVERGENCE!
