@@ -45,7 +45,7 @@ __host__ void initBoundingBox(Mesh mesh) {
 	h_box.start_i = getVoxel(h_box.start_vertex).index;
 	
 	for (int i = 0; i < 3; i++) {
-		h_box.size[i] = ceil(h_box.end_vertex[i] - h_box.start_vertex[i] / Voxel::SIZE);
+		h_box.size[i] = ceil((h_box.end_vertex[i] - h_box.start_vertex[i]) / Voxel::SIZE);
 		h_box.capacity[i] = h_box.size[i] + 2; 
 		// ^Only need +1 but I'm scared of floating point errors wrecking stuff up
 	}
