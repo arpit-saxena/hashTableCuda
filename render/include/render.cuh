@@ -62,7 +62,7 @@ class OpenGLScene {
 };
 
 namespace CUDA {
-	extern glm::mat4 trans_mats[2];
+	extern glm::mat4 * trans_mats;
 
 	/* 
 	* Called in runCuda() inside the kernel called in launch_kernel(), after the thread updates the triangle's 

@@ -15,7 +15,7 @@
 
 #include "shader_s.h"
 
-glm::mat4 CUDA::trans_mats[2];
+glm::mat4 * CUDA::trans_mats = nullptr;
 
 namespace {
 	float lightcubevertices[] = {
@@ -257,6 +257,7 @@ void OpenGLScene::runCuda()
 		model_mat = this->identity_model_mat;
 	}
 
+	CUDA::trans_mats = model_mat;
 	CUDA::preprocess();
 	CUDA::launch_kernel(dptr, numTriangles, this->meshes, this->d_h, model_mat);
 
@@ -290,9 +291,6 @@ OpenGLScene::OpenGLScene(Mesh h_meshes[2], glm::mat4 init_model_mat[2], glm::mat
 	gpuErrchk(cudaMemcpy(this->init_model_mat, init_model_mat, 2 * sizeof(glm::mat4), cudaMemcpyDefault));
 	gpuErrchk(cudaMemcpy(this->trans_model_mat, trans_model_mat, 2 * sizeof(glm::mat4), cudaMemcpyDefault));
 	gpuErrchk(cudaMemcpy(this->identity_model_mat, identity_model_mat, 2 * sizeof(glm::mat4), cudaMemcpyDefault));
-
-	CUDA::trans_mats[0] = trans_model_mat[0];
-	CUDA::trans_mats[1] = trans_model_mat[1];
 
 	this->d_h = d_h;
 	this->isFirstFrame = true;

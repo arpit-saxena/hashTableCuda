@@ -28,16 +28,23 @@ __host__ void initBoundingBox(Mesh mesh) {
 		h_box.end_vertex[i] = h_triangles[0].vertices[0].point[i];
 	}
 
+	float centroid[3];
 	for (int i = 0; i < mesh.numTriangles; i++) {
 		for (int j = 0; j < 3; j++) {
+			centroid[j] = 0.0f;
 			for (int k = 0; k < 3; k++) {
-				if (h_triangles[i].vertices[j].point[k] < h_box.start_vertex[k]) {
-					h_box.start_vertex[k] = h_triangles[i].vertices[j].point[k];
-				}
+				centroid[j] += h_triangles->vertices[j].point[k];
+			}
+			centroid[j] /= 3.0;
+		}
 
-				if (h_triangles[i].vertices[j].point[k] > h_box.end_vertex[k]) {
-					h_box.end_vertex[k] = h_triangles[i].vertices[j].point[k];
-				}
+		for (int j = 0; j < 3; j++) {
+			if (centroid[j] < h_box.start_vertex[j]) {
+				h_box.start_vertex[j] = centroid[j];
+			}
+
+			if (centroid[j] > h_box.end_vertex[j]) {
+				h_box.end_vertex[j] = centroid[j];
 			}
 		}
 	}
@@ -50,7 +57,7 @@ __host__ void initBoundingBox(Mesh mesh) {
 	for (int i = 0; i < 3; i++) {
 		uint32_t begin = (h_box.start_i >> 10 * i) & mask;
 		uint32_t end = (end_i >> 10 * i) & mask;
-		h_box.size[i] = end - begin;
+		h_box.size[i] = end - begin + 1;
 		capacity[i] = h_box.size[i] + 2; 
 		// ^Only need +1 but I'm scared of floating point errors wrecking stuff up
 	}
@@ -105,7 +112,7 @@ __device__ __host__ Voxel getVoxel(float point[3]) {
 	for (int i = 0; i < 3; i++) {
 		assert(point[i] > -1 && point[i] < 1);
 		uint32_t index = (int) ((point[i] + 1.0)/ Voxel::SIZE);
-		assert(index < (1u << 10) && index > 0); // Only 10 bits available for index
+		assert(index < (1u << 10)); // Only 10 bits available for index. index >= 0 obv
 		v.index |= index << (10 * i);
 	}
 	return v;
@@ -129,15 +136,12 @@ __device__ __host__ Voxel getVoxel(float point[3]) {
 	memcpy(t, &t2, sizeof(Triangle));
 } */
 
-__device__ __host__ void updatePositionVertex(float vertex[3], const glm::mat4 trans_mat) {
-	for (int i = 0; i < 3; i++) {
-		float ans = 0.0f;
-		for (int j = 0; j < 3; j++) {
-			ans += trans_mat[i][j] * vertex[j];
-		}
-		ans += trans_mat[i][3]; // Since the position vector has 1 in 4th place
-		vertex[i] = ans;
-	}
+__device__ __host__ void updatePositionVertex(float vertex[3], glm::mat4 *trans_mat) {
+	glm::vec4 pt = glm::vec4(vertex[0], vertex[1], vertex[2], 1.0f);
+	pt = *trans_mat * pt;
+	vertex[0] = pt.x;
+	vertex[1] = pt.y;
+	vertex[2] = pt.z;
 }
 
 /* __global__ void updateHashTable(Mesh *m, int mesh_i) {
@@ -199,7 +203,7 @@ __global__ void markCollidingTriangles() {
 	
 	for (; x < box->size[0]; x += gridDim.x * blockDim.x) {
         for (; y < box->size[1]; y += gridDim.y * blockDim.y) {
-            for (; z < box->size[2] * 32; z += gridDim.z * blockDim.z) {
+            for (; z < box->size[2]; z += gridDim.z * blockDim.z) {
                 uint32_t isOccupied = box->getOccupied(x, y, z);
                 ResidentBlock rb;
                 HashTableOperation op(table, &rb);
@@ -230,7 +234,9 @@ __global__ void markCollidingTriangles() {
 }
 
 __host__ void transformAndResetBox() {
-	const glm::mat4 trans_mat = CUDA::trans_mats[0];
+	glm::mat4 *trans_mat = (glm::mat4 *) malloc(sizeof(glm::mat4));
+	// This is potentially a huge time drain since we do this each frame
+	gpuErrchk( cudaMemcpy(trans_mat, &CUDA::trans_mats[0], sizeof(glm::mat4), cudaMemcpyDefault) );
 	BoundingBox h_box;
 	BoundingBox *d_box;
 	gpuErrchk( cudaMemcpyFromSymbol(&d_box, box, sizeof(BoundingBox *)) );
@@ -244,9 +250,9 @@ __host__ void transformAndResetBox() {
 	for (int i = 0; i < 3; i++) {
 		uint32_t begin = (h_box.start_i >> 10 * i) & mask;
 		uint32_t end = (end_i >> 10 * i) & mask;
-		h_box.size[i] = end - begin;
+		h_box.size[i] = end - begin + 1;
 	}
-	h_box.size[2] = CEILDIV(h_box.size[2], 32);
+	h_box.size[2] = CEILDIV(h_box.size[2], 32) * 32;
 
 	gpuErrchk ( cudaMemset(h_box.occupied, 0, h_box.totalCapacity * sizeof(uint32_t)) );
 
