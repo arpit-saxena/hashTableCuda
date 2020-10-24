@@ -279,8 +279,7 @@ void testImporter() {
 
 void rendertest() {
 	glm::mat4 init[2] = { glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)), glm::translate(glm::mat4(1.0f), glm::vec3(-0.5f, 0.0f, 0.0f)) };
-	glm::mat4 trans_mat = glm::rotate(glm::mat4(1.0f), (float)glm::radians(1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	glm::mat4 trans[2] = { init[0]*trans_mat*glm::inverse(init[0]), init[1]*trans_mat* glm::inverse(init[1]) };
+	glm::mat4 trans[2] = { glm::translate(glm::mat4(1.0f), glm::vec3(-0.01f, 0.0f, 0.0f)), glm::translate(glm::mat4(1.0f), glm::vec3(0.01f, 0.0f, 0.0f)) };
 	
 	Mesh mesh = import("models/bunny.ply");
 	Mesh h_meshes[2] = { mesh, mesh };

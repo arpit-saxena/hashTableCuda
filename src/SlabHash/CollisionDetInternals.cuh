@@ -20,7 +20,7 @@ struct BoundingBox {
 
     uint32_t start_i;
     uint32_t size[3];
-    uint32_t capacity[3];
+    uint32_t totalCapacity;
     uint32_t *occupied;
 
     __device__ void setOccupied(Voxel v);

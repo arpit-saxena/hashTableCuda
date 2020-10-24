@@ -43,21 +43,31 @@ __host__ void initBoundingBox(Mesh mesh) {
 	}
 
 	h_box.start_i = getVoxel(h_box.start_vertex).index;
-	
+
+	uint32_t mask = ((1 << 10) - 1);
+	uint32_t end_i = getVoxel(h_box.end_vertex).index;
+	uint32_t capacity[3];
 	for (int i = 0; i < 3; i++) {
-		h_box.size[i] = ceil((h_box.end_vertex[i] - h_box.start_vertex[i]) / Voxel::SIZE);
-		h_box.capacity[i] = h_box.size[i] + 2; 
+		uint32_t begin = (h_box.start_i >> 10 * i) & mask;
+		uint32_t end = (end_i >> 10 * i) & mask;
+		h_box.size[i] = end - begin;
+		capacity[i] = h_box.size[i] + 2; 
 		// ^Only need +1 but I'm scared of floating point errors wrecking stuff up
 	}
 
-	h_box.size[2] = CEILDIV(h_box.size[2], 32);
-	h_box.capacity[2] = h_box.size[2] + 2;
+	uint32_t tmp_size = h_box.size[2];
+	h_box.size[2] = CEILDIV(h_box.size[2], 32) * 32;
+	capacity[2] = CEILDIV(tmp_size + 2, 32) * 32;
 
-	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
-	gpuErrchk( cudaMalloc(&h_box.occupied, totalCapacity * sizeof(uint32_t)) );
+	h_box.totalCapacity = (capacity[0] * capacity[1] * capacity[2]) / 32;
+
+	gpuErrchk( cudaMalloc(&h_box.occupied, h_box.totalCapacity * sizeof(uint32_t)) );
 
 	BoundingBox *d_box;
 	gpuErrchk( cudaMalloc(&d_box, sizeof(BoundingBox)) );
+	// No need to zero out bounding box since it is done before every draw so the
+	// garbage data would get cleared then
+
 	gpuErrchk( cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
 	gpuErrchk( cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)) );
 }
@@ -69,11 +79,12 @@ __device__ void BoundingBox::setOccupied(Voxel v) {
 	int y = ((v.index >> 10) & mask) - ((start_i >> 10) & mask);
 	int z = ((v.index >> 20) & mask) - ((start_i >> 20) & mask);
 	// TODO: Can we just do v.index - start_i?
-	occupied[(x * size[0] + y) * size[1] + z / 32] |= 1u << (z % 32);
+	assert(((x * size[0] + y) * size[1] + z) / 32 < totalCapacity);
+	occupied[((x * size[0] + y) * size[1] + z) / 32] |= 1u << (z % 32);
 }
 
 __device__ uint32_t BoundingBox::getOccupied(int x, int y, int z) {
-	return occupied[(x * size[0] + y) * size[1] + z / 32];
+	return occupied[((x * size[0] + y) * size[1] + z) / 32];
 }
 
 // Gets a voxel of a triangle.
@@ -207,7 +218,7 @@ __global__ void markCollidingTriangles() {
 
                     voxelMidpoint[0] += x * Voxel::SIZE;
                     voxelMidpoint[1] += y * Voxel::SIZE;
-                    voxelMidpoint[2] += (z - z % 32) * Voxel::SIZE + i;
+                    voxelMidpoint[2] += (z - z % 32 + i) * Voxel::SIZE;
 
                     uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
 
@@ -229,14 +240,15 @@ __host__ void transformAndResetBox() {
 
 	h_box.start_i = getVoxel(h_box.start_vertex).index;
 	uint32_t end_i = getVoxel(h_box.end_vertex).index;
+	uint32_t mask = ((1 << 10) - 1);
 	for (int i = 0; i < 3; i++) {
-		uint32_t begin = (h_box.start_i >> 10 * i) & ((1u << 10) - 1);
-		uint32_t end = (end_i >> 10 * i) & ((1u << 10) - 1);
+		uint32_t begin = (h_box.start_i >> 10 * i) & mask;
+		uint32_t end = (end_i >> 10 * i) & mask;
 		h_box.size[i] = end - begin;
 	}
+	h_box.size[2] = CEILDIV(h_box.size[2], 32);
 
-	int totalCapacity = h_box.capacity[0] * h_box.capacity[1] * h_box.capacity[2];
-	gpuErrchk ( cudaMemset(h_box.occupied, 0, totalCapacity * sizeof(uint32_t)) );
+	gpuErrchk ( cudaMemset(h_box.occupied, 0, h_box.totalCapacity * sizeof(uint32_t)) );
 
 	gpuErrchk( cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
 	gpuErrchk( cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)) );

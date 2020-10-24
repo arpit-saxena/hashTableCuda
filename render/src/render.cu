@@ -165,6 +165,7 @@ __host__ void CUDA::launch_kernel(Triangle* buffer[2], unsigned numTriangles[2],
 	int threadsPerBlock = THREADS_PER_BLOCK, numBlocks = CEILDIV(totalTriangles, threadsPerBlock);
 	CUDA::triangleKernel <<< numBlocks, threadsPerBlock >>> (buffer[0], buffer[1], numTriangles[0], numTriangles[1],
 		meshes[0].triangles, meshes[1].triangles, d_h, transformation_mat);
+	gpuErrchk( cudaDeviceSynchronize() );
 }
 
 __device__ void CUDA::transform(Triangle* t, const glm::mat4 transformation_mat)
