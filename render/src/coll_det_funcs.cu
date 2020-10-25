@@ -61,4 +61,5 @@ __device__ void collisionMarker::markCollision(uint32_t voxel, uint32_t triangle
 	for (int i = 0; i < 3; ++i) {
 		t->vertices[i].hasCollided = 1.0f;
 	}
+	printf("Collided: %d\n", triangle_i);
 }

@@ -29,14 +29,17 @@ __host__ void initBoundingBox(Mesh mesh) {
 	}
 
 	float centroid[3];
+	//printf("Mesh 0 centroids:\n");
 	for (int i = 0; i < mesh.numTriangles; i++) {
 		for (int j = 0; j < 3; j++) {
 			centroid[j] = 0.0f;
 			for (int k = 0; k < 3; k++) {
-				centroid[j] += h_triangles->vertices[j].point[k];
+				centroid[j] += h_triangles[i].vertices[k].point[j];
 			}
 			centroid[j] /= 3.0;
+			//printf("%f ", centroid[j]);
 		}
+		//printf("\n");
 
 		for (int j = 0; j < 3; j++) {
 			if (centroid[j] < h_box.start_vertex[j]) {
@@ -48,6 +51,11 @@ __host__ void initBoundingBox(Mesh mesh) {
 			}
 		}
 	}
+	//printf("\n\n");
+
+	//printf("Bounding box:\n");
+	//printf("\tStart: %f %f %f\n", h_box.start_vertex[0], h_box.start_vertex[1], h_box.start_vertex[2]);
+	//printf("\tEnd: %f %f %f\n\n", h_box.end_vertex[0], h_box.end_vertex[1], h_box.end_vertex[2]);
 
 	h_box.start_i = getVoxel(h_box.start_vertex).index;
 
@@ -213,16 +221,19 @@ __global__ void markCollidingTriangles() {
                 // all triangles of mesh 1 by searching the hash table
 
                 for (int i = 0; i < 32; i++) {
-                    bool is_active = isOccupied & (1 << (32 - i));
+                    bool is_active = isOccupied & (1 << i);
                     if (!is_active) continue; //< No divergence since all lanes have same is_active
                     float voxelMidpoint[3];
                     for (int j = 0; j < 3; j++) {
                         voxelMidpoint[j] = box->start_vertex[j] + Voxel::SIZE / 2;
                     }
 
-                    voxelMidpoint[0] += x * Voxel::SIZE;
-                    voxelMidpoint[1] += y * Voxel::SIZE;
-                    voxelMidpoint[2] += (z - z % 32 + i) * Voxel::SIZE;
+					voxelMidpoint[0] += x * Voxel::SIZE;
+					voxelMidpoint[1] += y * Voxel::SIZE;
+					voxelMidpoint[2] += (z - z % 32 + i) * Voxel::SIZE;
+
+					if (voxelMidpoint[2] >= 1) continue;
+					printf("Marking\n");
 
                     uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
 
@@ -244,6 +255,9 @@ __host__ void transformAndResetBox() {
 	updatePositionVertex(h_box.start_vertex, trans_mat);
 	updatePositionVertex(h_box.end_vertex, trans_mat);
 
+	//printf("Transformed box:\n");
+	//printf("\tStart: %f %f %f\n", h_box.start_vertex[0], h_box.start_vertex[1], h_box.start_vertex[2]);
+	//printf("\tEnd: %f %f %f\n\n", h_box.end_vertex[0], h_box.end_vertex[1], h_box.end_vertex[2]);
 	h_box.start_i = getVoxel(h_box.start_vertex).index;
 	uint32_t end_i = getVoxel(h_box.end_vertex).index;
 	uint32_t mask = ((1 << 10) - 1);
@@ -258,4 +272,36 @@ __host__ void transformAndResetBox() {
 
 	gpuErrchk( cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault) );
 	gpuErrchk( cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)) );
+}
+
+__host__ void CUDA::checkBox(Mesh mesh) {
+	Triangle *h_triangles = (Triangle *) malloc(mesh.numTriangles * sizeof(Triangle));
+	gpuErrchk( cudaMemcpy(h_triangles, mesh.triangles, mesh.numTriangles * sizeof(Triangle), cudaMemcpyDefault) );
+
+	BoundingBox h_box;
+	BoundingBox *d_box;
+	gpuErrchk( cudaMemcpyFromSymbol(&d_box, box, sizeof(BoundingBox *)) );
+	gpuErrchk( cudaMemcpy(&h_box, d_box, sizeof(BoundingBox), cudaMemcpyDefault) );
+
+	printf("Transformed mesh 0 centroids:\n");
+	for (int i = 0; i < mesh.numTriangles; i++) {
+		for (int j = 0; j < 3; j++) {
+			float centroid_coord = 0.0f;
+			for (int k = 0; k < 3; k++) {
+				centroid_coord += h_triangles[i].vertices[k].point[j];
+			}
+			centroid_coord /= 3.0;
+			assert(centroid_coord > -1 && centroid_coord < 1);
+			printf("%f ", centroid_coord);
+			if (!(h_box.start_vertex[j] - centroid_coord <= 1e-7)) {
+				printf("\nStart coord: %f", h_box.start_vertex[j]);
+				printf("\nDifference: %f", centroid_coord - h_box.start_vertex[j]);
+				int mahakhela = 0;
+				fflush(stdout);
+				assert(mahakhela);
+			}
+			//assert(h_box.start_vertex[j] <= centroid_coord);
+		}
+		printf("\n");
+	}
 }

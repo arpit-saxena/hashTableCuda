@@ -95,6 +95,11 @@ namespace CUDA {
 	*/
 	__host__ void initCollisionDet(Mesh meshes[2]);
 
+	/*
+	* Temp function for debugging
+	*/
+	__host__ void checkBox(Mesh mesh);
+
 	__host__ void launch_kernel(Triangle* buffer[2], unsigned numTriangles[2], Mesh meshes[2], 
 		HashTable* d_h, glm::mat4 transformation_mat[2]);
 

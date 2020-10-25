@@ -260,6 +260,9 @@ void OpenGLScene::runCuda()
 	CUDA::trans_mats = model_mat;
 	CUDA::preprocess();
 	CUDA::launch_kernel(dptr, numTriangles, this->meshes, this->d_h, model_mat);
+	gpuErrchk( cudaDeviceSynchronize() );
+	//printf("Done kernel\n\n");
+	//CUDA::checkBox(this->meshes[0]);
 
 	if (!this->collided) {
 		collisionMarker::init(this->meshes);
