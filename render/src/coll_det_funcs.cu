@@ -49,15 +49,20 @@ __device__ void CUDA::updateTrianglePosition(Triangle* triangle, int triangleInd
 }
 
 __constant__ Triangle* collisionMarker::d_meshes[2] = { nullptr, nullptr };
+__constant__ int collisionMarker::numTriangles[2];
 
 __host__ void collisionMarker::init(Mesh meshes[2]) {
 	for (int i = 0; i < 2; ++i) {
+		gpuErrchk(cudaMemcpyToSymbol(numTriangles, &meshes[i].numTriangles, i * sizeof(int)));
 		gpuErrchk(cudaMemcpyToSymbol(d_meshes, &(meshes[i].triangles), sizeof(Triangle *), i*sizeof(Triangle*)));
 	}
 }
 
 __device__ void collisionMarker::markCollision(uint32_t voxel, uint32_t triangle_i)
 {
+	printf("Marking voxel %d\n", voxel);
+	int numT = numTriangles[1];
+	assert(triangle_i < numTriangles[1]);
 	Triangle* t = d_meshes[1] + triangle_i;
 	for (int i = 0; i < 3; ++i) {
 		t->vertices[i].hasCollided = 1.0f;
