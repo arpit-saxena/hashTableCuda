@@ -221,8 +221,10 @@ __global__ void markCollidingTriangles() {
                 // all triangles of mesh 1 by searching the hash table
 
                 for (int i = 0; i < 32; i++) {
+					assert(__activemask() == WARP_MASK);
                     bool is_active = isOccupied & (1 << i);
-                    if (!is_active) continue; //< No divergence since all lanes have same is_active
+					if (!is_active) continue; //< No divergence since all lanes have same is_active
+					assert(__activemask() == WARP_MASK);
                     float voxelMidpoint[3];
                     for (int j = 0; j < 3; j++) {
                         voxelMidpoint[j] = box->start_vertex[j] + Voxel::SIZE / 2;
@@ -233,9 +235,8 @@ __global__ void markCollidingTriangles() {
 					voxelMidpoint[2] += (z - z % 32 + i) * Voxel::SIZE;
 
 					if (voxelMidpoint[2] >= 1) continue;
-					printf("Marking\n");
 
-                    uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
+					uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
 
                     table->findvalue(voxelIndex, collisionMarker::markCollision);
                 }

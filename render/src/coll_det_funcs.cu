@@ -28,7 +28,8 @@ __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
 		return true;
 	} */ // !< Hope this was just testing and 120 isn't sth important
 
-	int threadsPerBlock = THREADS_PER_BLOCK, numBlocks = 128; //FIXME: Change this >.<
+	dim3 threadsPerBlock = dim3(1, 1, THREADS_PER_BLOCK),
+		 numBlocks = dim3(1, 1, 128); //FIXME: Change this >.<
 	markCollidingTriangles<<<numBlocks, threadsPerBlock>>>();
 	gpuErrchk( cudaDeviceSynchronize() );
 	bool collisionHappened = false;
