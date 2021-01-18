@@ -1,14 +1,14 @@
-#include "SlabHash/HashTable.cuh"
-#include "errorcheck.h"
-#include <cstdio>
 #include <assert.h>
 
-__device__ inline int laneID() {
-	return threadIdx.x % warpSize;
-}
+#include <cstdio>
+
+#include "SlabHash/HashTable.cuh"
+#include "errorcheck.h"
+
+__device__ inline int laneID() { return threadIdx.x % warpSize; }
 
 __device__ inline int warpID() {
-	return CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
+  return CEILDIV(blockDim.x, warpSize) * blockIdx.x + (threadIdx.x / warpSize);
 }
 
 //__device__ void readanddeallocate(Address a) {
@@ -18,20 +18,21 @@ __device__ inline int warpID() {
 //	uint32_t data2 = *(SlabAlloc::SlabAddress(address, laneID()));
 //	//SlabAlloc::deallocate(a);
 //	//SlabAlloc::deallocate(address);
-//	if(laneID() != 31 && (data1 != warpID() || data2 != warpID() + (1 << 18)))
-//		printf("After writing, Warp %d, Lane %d: Slab 1 - %d, Slab 2 - %d\n", warpID(), laneID(), data1, data2);
+//	if(laneID() != 31 && (data1 != warpID() || data2 != warpID() + (1 <<
+//18))) 		printf("After writing, Warp %d, Lane %d: Slab 1 - %d, Slab 2 - %d\n",
+//warpID(), laneID(), data1, data2);
 //}
 //
 //__device__ float sum_local_rbl_changes = 0.0;
 //__device__ float sum_sqr_local_rbl_changes = 0.0;
 //
 //__global__ void checkallbitmaps() {
-//	//Checking if array SlabAlloc::bitmaps has been copied properly (it most probably has)
-//	int i = blockDim.x * blockIdx.x + threadIdx.x;
-//	while (i < SlabAlloc::maxSuperBlocks * SuperBlock::numMemoryBlocks) {
-//		uint32_t Bitmap = SlabAlloc::bitmaps[i / 32].bitmap[i % 32];
-//		if (Bitmap != 0) {
-//			printf("SlabAlloc::bitmaps[%d].bitmap[%d] = %x, instead of 0\n", i / 32, i % 32, Bitmap);
+//	//Checking if array SlabAlloc::bitmaps has been copied properly (it most
+//probably has) 	int i = blockDim.x * blockIdx.x + threadIdx.x; 	while (i <
+//SlabAlloc::maxSuperBlocks * SuperBlock::numMemoryBlocks) { 		uint32_t Bitmap =
+//SlabAlloc::bitmaps[i / 32].bitmap[i % 32]; 		if (Bitmap != 0) {
+//			printf("SlabAlloc::bitmaps[%d].bitmap[%d] = %x, instead of
+//0\n", i / 32, i % 32, Bitmap);
 //		}
 //		i += gridDim.x;
 //	}
@@ -42,9 +43,9 @@ __device__ inline int warpID() {
 //	int x = 0;
 //	int y = 0;
 //	Address a = rb.warp_allocate(&x), a2 = rb.warp_allocate(&y);
-//	
-//	// Calculation of average local_rbl_changes, and terminating threads for whom any one warp_allocate() fails
-//	float avg = ((float)x + (float)y) / 2;
+//
+//	// Calculation of average local_rbl_changes, and terminating threads for
+//whom any one warp_allocate() fails 	float avg = ((float)x + (float)y) / 2;
 //	atomicAdd(&sum_local_rbl_changes, avg);
 //	atomicAdd(&sum_sqr_local_rbl_changes, (avg*avg));
 //	if (a == EMPTY_ADDRESS || a2 == EMPTY_ADDRESS) {
@@ -54,9 +55,10 @@ __device__ inline int warpID() {
 //	}
 //
 //	// Checking if all slabs have been initialized properly
-//	uint32_t data1 = *(SlabAlloc::SlabAddress(a, laneID())), data2 = *(SlabAlloc::SlabAddress(a2, laneID()));
-//	if((data1 != 0xFFFFFFFF || data2 != 0xFFFFFFFF))
-//		printf("Before writing, Warp %d, Lane %d: Slab 1 - %x, Slab 2 - %x\n", warpID(), laneID(), data1, data2);
+//	uint32_t data1 = *(SlabAlloc::SlabAddress(a, laneID())), data2 =
+//*(SlabAlloc::SlabAddress(a2, laneID())); 	if((data1 != 0xFFFFFFFF || data2 !=
+//0xFFFFFFFF)) 		printf("Before writing, Warp %d, Lane %d: Slab 1 - %x, Slab 2 -
+//%x\n", warpID(), laneID(), data1, data2);
 //
 //	auto ptr = SlabAlloc::SlabAddress(a, laneID());
 //	*ptr = warpID();
@@ -65,39 +67,47 @@ __device__ inline int warpID() {
 //	}
 //	ptr = SlabAlloc::SlabAddress(a2, laneID());
 //	*ptr = warpID()+(1<<18);
-//	
+//
 //	readanddeallocate(a);
 //}
 //
-//void test1() {
-//	const ULL log2slabsPerWarp = 0;	// Cannot be greater than SLAB_BITS(10) + MEMORYBLOCK_BITS(8)
+// void test1() {
+//	const ULL log2slabsPerWarp = 0;	// Cannot be greater than SLAB_BITS(10)
+//+ MEMORYBLOCK_BITS(8)
 //	// Make sure numWarps is big enough so that numSuperBlocks is non-zero
-//	const ULL numWarps = 1 << 18, numSuperBlocks = numWarps >> SLAB_BITS + MEMORYBLOCK_BITS - log2slabsPerWarp;
-//	SlabAlloc::init();
-//	int numBlocks = numWarps>>5, threadsPerBlock = 1024;
+//	const ULL numWarps = 1 << 18, numSuperBlocks = numWarps >> SLAB_BITS +
+//MEMORYBLOCK_BITS - log2slabsPerWarp; 	SlabAlloc::init(); 	int numBlocks =
+//numWarps>>5, threadsPerBlock = 1024;
 //	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<28));
 //
-//	checkallbitmaps <<< ((SlabAlloc::maxSuperBlocks * SuperBlock::numMemoryBlocks) >> 5), 1024 >>> ();
+//	checkallbitmaps <<< ((SlabAlloc::maxSuperBlocks *
+//SuperBlock::numMemoryBlocks) >> 5), 1024 >>> ();
 //	gpuErrchk(cudaDeviceSynchronize());
-//	printf("Completed check of array SlabAlloc::bitmaps before running kernel\n");
+//	printf("Completed check of array SlabAlloc::bitmaps before running
+//kernel\n");
 //
 //	kernel<<<numBlocks,threadsPerBlock>>>();
 //	gpuErrchk(cudaDeviceSynchronize());
 //
-//	//checkallbitmaps <<< ((SlabAlloc::maxSuperBlocks * SuperBlock::numMemoryBlocks) >> 5), 1024 >>> ();
+//	//checkallbitmaps <<< ((SlabAlloc::maxSuperBlocks *
+//SuperBlock::numMemoryBlocks) >> 5), 1024 >>> ();
 //	gpuErrchk(cudaDeviceSynchronize());
-//	printf("Completed check of array SlabAlloc::bitmaps after running kernel\n");
+//	printf("Completed check of array SlabAlloc::bitmaps after running
+//kernel\n");
 //
 //	float avg_local_rbl_changes = 0.0, var_local_rbl_changes = 0.0;
-//	gpuErrchk(cudaMemcpyFromSymbol(&avg_local_rbl_changes, sum_local_rbl_changes, sizeof(float)));
-//	gpuErrchk(cudaMemcpyFromSymbol(&var_local_rbl_changes, sum_sqr_local_rbl_changes, sizeof(float)));
-//	avg_local_rbl_changes /= (numWarps << 5);
-//	var_local_rbl_changes = var_local_rbl_changes / (numWarps << 5) - (avg_local_rbl_changes * avg_local_rbl_changes);
-//	printf("Average local_rbl_changes = %f, Variance in local_rbl_changes=%f\n", avg_local_rbl_changes, var_local_rbl_changes);
+//	gpuErrchk(cudaMemcpyFromSymbol(&avg_local_rbl_changes,
+//sum_local_rbl_changes, sizeof(float)));
+//	gpuErrchk(cudaMemcpyFromSymbol(&var_local_rbl_changes,
+//sum_sqr_local_rbl_changes, sizeof(float))); 	avg_local_rbl_changes /= (numWarps
+//<< 5); 	var_local_rbl_changes = var_local_rbl_changes / (numWarps << 5) -
+//(avg_local_rbl_changes * avg_local_rbl_changes); 	printf("Average
+//local_rbl_changes = %f, Variance in local_rbl_changes=%f\n",
+//avg_local_rbl_changes, var_local_rbl_changes);
 //
 //	unsigned nsb = 0;
-//	gpuErrchk(cudaMemcpyFromSymbol(&nsb, SlabAlloc::numSuperBlocks, sizeof(unsigned int)));
-//	printf("Final no. of superblocks: %d\n", nsb);
+//	gpuErrchk(cudaMemcpyFromSymbol(&nsb, SlabAlloc::numSuperBlocks,
+//sizeof(unsigned int))); 	printf("Final no. of superblocks: %d\n", nsb);
 //	SlabAlloc::destroy();
 //}
 //
@@ -112,7 +122,7 @@ __device__ inline int warpID() {
 //	SlabAlloc::allocateSuperBlock();
 //}
 //
-//void test2() {
+// void test2() {
 //	const ULL numWarps = 1, numSuperBlocks = 1;
 //	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
 //	SlabAlloc * d_s;
@@ -126,101 +136,110 @@ __device__ inline int warpID() {
 //	gpuErrchk(cudaFree(d_s));
 //}
 
-
 __managed__ uint32_t search_success = 0;
 __managed__ uint32_t delete_success = 0;
 __managed__ uint32_t finder_success = 0;
 
-__device__ inline uint32_t Key() {		return blockIdx.x*blockDim.x + threadIdx.x;	}
-__device__ inline uint32_t Value() {	return Key()+5;	}
+__device__ inline uint32_t Key() {
+  return blockIdx.x * blockDim.x + threadIdx.x;
+}
+__device__ inline uint32_t Value() { return Key() + 5; }
 
 __global__ void kernel3ins(HashTable* h) {
-	ResidentBlock rb;
-	HashTableOperation op(h, &rb);
-	op.run(Instruction::Type::Insert, Key(), Value());
+  ResidentBlock rb;
+  HashTableOperation op(h, &rb);
+  op.run(Instruction::Type::Insert, Key(), Value());
 }
 
 /*__global__ void kernel3inscheck(HashTable* h) {
-	//ResidentBlock rb;
-	uint32_t value = SEARCH_NOT_FOUND;
-	HashTableOperation op(h, nullptr);
-	op.run(Instruction::Type::Search, Key(), value);
-	if (value != SEARCH_NOT_FOUND) {
-		atomicAdd(&search_success, 1);
-	}
+        //ResidentBlock rb;
+        uint32_t value = SEARCH_NOT_FOUND;
+        HashTableOperation op(h, nullptr);
+        op.run(Instruction::Type::Search, Key(), value);
+        if (value != SEARCH_NOT_FOUND) {
+                atomicAdd(&search_success, 1);
+        }
 }*/
 
 __device__ void callBack(uint32_t key, uint32_t value) {
-	atomicAdd(&finder_success, 1);
+  atomicAdd(&finder_success, 1);
 }
 __device__ void (*d_callBack)(uint32_t, uint32_t) = callBack;
-void findvaluescheck(HashTable * h, int numKeys, cudaStream_t streams[]) {
-	uint32_t * keys, * d_keys;
-	cudaMallocHost(&keys, sizeof(uint32_t) * numKeys);
-	for(int i = 0; i < numKeys; ++i) {
-		keys[i] = i;
-	}
-	void* h_callBack;
-	gpuErrchk(cudaMemcpyFromSymbol(&h_callBack, d_callBack, sizeof(&callBack)));
-	
-	gpuErrchk(cudaMalloc(&d_keys, numKeys*sizeof(uint32_t)));
-	gpuErrchk(cudaMemcpyAsync(d_keys, keys, numKeys*sizeof(uint32_t), cudaMemcpyDefault));
+void findvaluescheck(HashTable* h, int numKeys, cudaStream_t streams[]) {
+  uint32_t *keys, *d_keys;
+  cudaMallocHost(&keys, sizeof(uint32_t) * numKeys);
+  for (int i = 0; i < numKeys; ++i) {
+    keys[i] = i;
+  }
+  void* h_callBack;
+  gpuErrchk(cudaMemcpyFromSymbol(&h_callBack, d_callBack, sizeof(&callBack)));
 
-	for(int i = 0; i < numKeys/THREADS_PER_BLOCK; ++i) {
-		h->findvalues(d_keys+i*THREADS_PER_BLOCK, THREADS_PER_BLOCK, reinterpret_cast<void(*)(uint32_t, uint32_t)>(h_callBack), streams[i]);
-	}
-	gpuErrchk(cudaFree(d_keys));
-	cudaFreeHost(keys);
+  gpuErrchk(cudaMalloc(&d_keys, numKeys * sizeof(uint32_t)));
+  gpuErrchk(cudaMemcpyAsync(d_keys, keys, numKeys * sizeof(uint32_t),
+                            cudaMemcpyDefault));
+
+  for (int i = 0; i < numKeys / THREADS_PER_BLOCK; ++i) {
+    h->findvalues(d_keys + i * THREADS_PER_BLOCK, THREADS_PER_BLOCK,
+                  reinterpret_cast<void (*)(uint32_t, uint32_t)>(h_callBack),
+                  streams[i]);
+  }
+  gpuErrchk(cudaFree(d_keys));
+  cudaFreeHost(keys);
 }
 
 __global__ void kernel3del(HashTable* h) {
-	//ResidentBlock rb;
-	HashTableOperation op(h, nullptr);
-	op.run(Instruction::Type::Delete, Key(), Value());
+  // ResidentBlock rb;
+  HashTableOperation op(h, nullptr);
+  op.run(Instruction::Type::Delete, Key(), Value());
 }
 
 /*__global__ void kernel3delcheck(HashTable* h) {
-	//ResidentBlock rb;
-	uint32_t value = SEARCH_NOT_FOUND;
-	HashTableOperation op(h, nullptr);
-	op.run(Instruction::Type::Search, Key(), value);
-	if (value == SEARCH_NOT_FOUND) {
-		atomicAdd(&delete_success, 1);
-	}
+        //ResidentBlock rb;
+        uint32_t value = SEARCH_NOT_FOUND;
+        HashTableOperation op(h, nullptr);
+        op.run(Instruction::Type::Search, Key(), value);
+        if (value == SEARCH_NOT_FOUND) {
+                atomicAdd(&delete_success, 1);
+        }
 }*/
 
 void test3() {
-	const ULL numThreads = 1<<18;
-	const ULL numWarps = numThreads >> 5;
-	const int numBlocks = numWarps>>1, threadsPerBlock = THREADS_PER_BLOCK;
+  const ULL numThreads = 1 << 18;
+  const ULL numWarps = numThreads >> 5;
+  const int numBlocks = numWarps >> 1, threadsPerBlock = THREADS_PER_BLOCK;
 
-	cudaStream_t streams[numBlocks];
-	for(int i = 0; i < numBlocks; ++i) {
-		gpuErrchk(cudaStreamCreate(streams+i));
-	}
+  cudaStream_t streams[numBlocks];
+  for (int i = 0; i < numBlocks; ++i) {
+    gpuErrchk(cudaStreamCreate(streams + i));
+  }
 
-	SlabAlloc::init();
-	gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1<<30));
-	
-	int no_of_buckets = numThreads / 128;	// avg slabs per bucket ~ 9-10, assuming 1 insert instruction per thread
-	HashTable * h = new HashTable(no_of_buckets);
-	HashTable * d_h;
-	gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
-	gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
+  SlabAlloc::init();
+  gpuErrchk(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1 << 30));
 
-	kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h);
-	//kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
-	findvaluescheck(h, numBlocks*threadsPerBlock, streams);
-	kernel3del<<<numBlocks, threadsPerBlock>>>(d_h);
-	//kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h);
+  int no_of_buckets =
+      numThreads / 128;  // avg slabs per bucket ~ 9-10, assuming 1 insert
+                         // instruction per thread
+  HashTable* h = new HashTable(no_of_buckets);
+  HashTable* d_h;
+  gpuErrchk(cudaMalloc(&d_h, sizeof(HashTable)));
+  gpuErrchk(cudaMemcpy(d_h, h, sizeof(HashTable), cudaMemcpyDefault));
 
-	gpuErrchk(cudaFree(d_h));
-	delete h;
-	SlabAlloc::destroy();
+  kernel3ins<<<numBlocks, threadsPerBlock>>>(d_h);
+  // kernel3inscheck<<<numBlocks, threadsPerBlock>>>(d_h);
+  findvaluescheck(h, numBlocks * threadsPerBlock, streams);
+  kernel3del<<<numBlocks, threadsPerBlock>>>(d_h);
+  // kernel3delcheck<<<numBlocks, threadsPerBlock>>>(d_h);
 
-	printf("searcher() success rate = %f%\n", (float)search_success * 100 / (float)numThreads);
-	printf("deleter() success rate = %f%\n", (float)delete_success * 100 / (float)numThreads);
-	printf("finder() success rate = %f%\n", (float)finder_success*100/(float)numThreads);
+  gpuErrchk(cudaFree(d_h));
+  delete h;
+  SlabAlloc::destroy();
+
+  printf("searcher() success rate = %f%\n",
+         (float)search_success * 100 / (float)numThreads);
+  printf("deleter() success rate = %f%\n",
+         (float)delete_success * 100 / (float)numThreads);
+  printf("finder() success rate = %f%\n",
+         (float)finder_success * 100 / (float)numThreads);
 }
 
 //
@@ -230,14 +249,16 @@ void test3() {
 //	uint32_t left = threadIdx.x, right = threadIdx.x + 5;
 //	uint32_t data[2] = { left, right };
 //	if (1 << laneID() & VALID_KEY_MASK) {
-//		*(ULL*)(SlabAlloc::SlabAddress(a, laneID())) = *reinterpret_cast<ULL *>(data);
-//		//assert(atomicCAS((ULL*)(SlabAlloc::SlabAddress(a, laneID())), (ULL)0xFFFFFFFFFFFFFFFF, *((ULL*)data)) == (ULL)0xFFFFFFFFFFFFFFFF);
+//		*(ULL*)(SlabAlloc::SlabAddress(a, laneID())) =
+//*reinterpret_cast<ULL *>(data);
+//		//assert(atomicCAS((ULL*)(SlabAlloc::SlabAddress(a, laneID())),
+//(ULL)0xFFFFFFFFFFFFFFFF, *((ULL*)data)) == (ULL)0xFFFFFFFFFFFFFFFF);
 //		assert(*(SlabAlloc::SlabAddress(a, laneID())) == left);
 //		assert(*(SlabAlloc::SlabAddress(a, laneID()+1)) == right);
 //	}
 //}
 //
-//void test4() {
+// void test4() {
 //	const ULL numWarps = 1, numSuperBlocks = 1;
 //	SlabAlloc * s = new SlabAlloc(numSuperBlocks);
 //	SlabAlloc * d_s;
@@ -251,44 +272,47 @@ void test3() {
 //	gpuErrchk(cudaFree(d_s));
 //}
 
-__global__ void somekernel() {
-	SlabAlloc::allocateSuperBlock();
-}
+__global__ void somekernel() { SlabAlloc::allocateSuperBlock(); }
 
 void unittest() {
-	SlabAlloc::init();
-	somekernel<<<1<<8, 1024>>>();
-	SlabAlloc::destroy();
+  SlabAlloc::init();
+  somekernel<<<1 << 8, 1024>>>();
+  SlabAlloc::destroy();
 }
 
 /* #include "SlabHash/Importer.cuh"
 #include <iostream>
 void testImporter() {
-	Mesh mesh = import("models/bunny.ply");
-	std::cout << "Num Triangles: " << mesh.numTriangles << std::endl;
-	for (int i = 0; i < mesh.numTriangles; i++) {
-		Triangle *t = &mesh.triangles[i];
-		for (int j = 0; j < 3; j++) {
-			float *v = t->vertices[j];
-			//std::cout << v[0] << ' ' << v[1] << ' ' << v[2] << std::endl;
-		}
-	}
+        Mesh mesh = import("models/bunny.ply");
+        std::cout << "Num Triangles: " << mesh.numTriangles << std::endl;
+        for (int i = 0; i < mesh.numTriangles; i++) {
+                Triangle *t = &mesh.triangles[i];
+                for (int j = 0; j < 3; j++) {
+                        float *v = t->vertices[j];
+                        //std::cout << v[0] << ' ' << v[1] << ' ' << v[2] <<
+std::endl;
+                }
+        }
 }
  */
 #include "render.cuh"
 
 void rendertest() {
-	glm::mat4 init[2] = { glm::translate(glm::mat4(1.0f), glm::vec3(0.1f, 0.0f, 0.0f)), glm::translate(glm::mat4(1.0f), glm::vec3(-0.1f, 0.0f, 0.0f)) };
-	glm::mat4 trans[2] = { glm::translate(glm::mat4(1.0f), glm::vec3(-0.01f, 0.0f, 0.0f)), glm::translate(glm::mat4(1.0f), glm::vec3(0.01f, 0.0f, 0.0f)) };
-	
-	Mesh mesh = import("models/bunny.ply");
-	Mesh h_meshes[2] = { mesh, mesh };
+  glm::mat4 init[2] = {
+      glm::translate(glm::mat4(1.0f), glm::vec3(0.1f, 0.0f, 0.0f)),
+      glm::translate(glm::mat4(1.0f), glm::vec3(-0.1f, 0.0f, 0.0f))};
+  glm::mat4 trans[2] = {
+      glm::translate(glm::mat4(1.0f), glm::vec3(-0.01f, 0.0f, 0.0f)),
+      glm::translate(glm::mat4(1.0f), glm::vec3(0.01f, 0.0f, 0.0f))};
 
-	OpenGLScene scene(h_meshes, init, trans, nullptr);
-	scene.render();
+  Mesh mesh = import("models/bunny.ply");
+  Mesh h_meshes[2] = {mesh, mesh};
+
+  OpenGLScene scene(h_meshes, init, trans, nullptr);
+  scene.render();
 }
 
 int main() {
-	rendertest();
-	gpuErrchk(cudaDeviceReset());
+  rendertest();
+  gpuErrchk(cudaDeviceReset());
 }

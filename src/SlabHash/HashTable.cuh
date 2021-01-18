@@ -2,6 +2,7 @@
 #define HASHTABLE_H
 
 #include <cstdint>
+
 #include "SlabAlloc.cuh"
 
 #define ADDRESS_LANE 31
@@ -14,51 +15,63 @@
 
 typedef unsigned long long ULL;
 
-class HashTable {		// a single object of this will be made on host, and copied to global device memory
-		Address * base_slabs;
-		const unsigned no_of_buckets;
-	public:
-		__host__ HashTable(int size);
-		__host__ ~HashTable();
-		//d_keys has to be an array on GPU-accessible memory
-		__host__ __device__ void findvalues(uint32_t * d_keys, unsigned no_of_keys, void (*callback)(uint32_t key, uint32_t value), cudaStream_t stream = 0);
+class HashTable {  // a single object of this will be made on host, and copied
+                   // to global device memory
+  Address *base_slabs;
+  const unsigned no_of_buckets;
 
-		// Finds all values associated with key and calls callback with them
-		__device__ void findvalue(uint32_t key, void (*callback)(uint32_t key, uint32_t value));
+ public:
+  __host__ HashTable(int size);
+  __host__ ~HashTable();
+  // d_keys has to be an array on GPU-accessible memory
+  __host__ __device__ void findvalues(uint32_t *d_keys, unsigned no_of_keys,
+                                      void (*callback)(uint32_t key,
+                                                       uint32_t value),
+                                      cudaStream_t stream = 0);
 
-		friend class HashTableOperation;
+  // Finds all values associated with key and calls callback with them
+  __device__ void findvalue(uint32_t key,
+                            void (*callback)(uint32_t key, uint32_t value));
+
+  friend class HashTableOperation;
 };
 
 namespace utilitykernel {
-	__global__ void init_table(int, Address *);
-	__global__ void findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, 
-		Address* base_slabs, unsigned no_of_buckets,
-		void (*callback)(uint32_t key, uint32_t value),
-		HashTable *table);
-}
+__global__ void init_table(int, Address *);
+__global__ void findvalueskernel(uint32_t *d_keys, unsigned no_of_keys,
+                                 Address *base_slabs, unsigned no_of_buckets,
+                                 void (*callback)(uint32_t key, uint32_t value),
+                                 HashTable *table);
+}  // namespace utilitykernel
 
 struct Instruction {
-	enum Type {
-		Insert,
-		Delete
-	};
-	
-	Type type;
-	uint32_t key, value;
+  enum Type { Insert, Delete };
+
+  Type type;
+  uint32_t key, value;
 };
 
-class HashTableOperation {		// a single object of this will reside on thread-local memory for all threads
-	const HashTable* __restrict__ const hashtable;
-	ResidentBlock* const __restrict__ resident_block;
+class HashTableOperation {  // a single object of this will reside on
+                            // thread-local memory for all threads
+  const HashTable *__restrict__ const hashtable;
+  ResidentBlock *const __restrict__ resident_block;
 
-	__device__ static ULL makepair(uint32_t key, uint32_t value);
+  __device__ static ULL makepair(uint32_t key, uint32_t value);
 
-	__device__ void inserter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next);
-	//__device__ void searcher(uint32_t s_read_data[], uint32_t src_key, int src_lane, uint32_t &work_queue, Address &next);
-	__device__ void deleter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next);
-public:
-	__device__ HashTableOperation(const HashTable * const __restrict__ h, ResidentBlock * const __restrict__ rb);
-	__device__ void run(const Instruction::Type type, const uint32_t key, uint32_t value, bool is_active = true);
+  __device__ void inserter(uint32_t s_read_data[], uint32_t src_key,
+                           uint32_t src_value, int src_lane,
+                           uint32_t &work_queue, Address &next);
+  //__device__ void searcher(uint32_t s_read_data[], uint32_t src_key, int
+  //src_lane, uint32_t &work_queue, Address &next);
+  __device__ void deleter(uint32_t s_read_data[], uint32_t src_key,
+                          uint32_t src_value, int src_lane,
+                          uint32_t &work_queue, Address &next);
+
+ public:
+  __device__ HashTableOperation(const HashTable *const __restrict__ h,
+                                ResidentBlock *const __restrict__ rb);
+  __device__ void run(const Instruction::Type type, const uint32_t key,
+                      uint32_t value, bool is_active = true);
 };
 
 #endif /* HASHTABLE_H */

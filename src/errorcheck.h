@@ -6,16 +6,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+#define gpuErrchk(ans) \
+  { gpuAssert((ans), __FILE__, __LINE__); }
 
-__host__
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-	if (code != cudaSuccess) 
-	{
-		printf("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-		if (abort) exit(code);
-	}
+__host__ inline void gpuAssert(cudaError_t code, const char *file, int line,
+                               bool abort = true) {
+  if (code != cudaSuccess) {
+    printf("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+    if (abort) exit(code);
+  }
 }
 
 #else /* NDEBUG */
