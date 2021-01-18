@@ -14,9 +14,12 @@
 #define CEILDIV(a, b) ((a/b) + (a % b != 0))
 
 #ifdef __CUDACC__
-#define __laneID (threadIdx.x % warpSize)
-#define __local_warp_id (threadIdx.x / warpSize)
-#define __global_warp_id (CEILDIV(blockDim.x, warpSize) * blockIdx.x + __local_warp_id)
+#define __block_threadIdx (threadIdx.x + blockDim.x*(threadIdx.y + blockDim.y*threadIdx.z))
+#define __laneID (__block_threadIdx % warpSize)
+#define __local_warp_id (__block_threadIdx / warpSize)
+#define __global_blockIdx (blockIdx.x + gridDim.x * (blockIdx.y + gridDim.y * blockIdx.z))
+#define __numwarps_in_block (CEILDIV(blockDim.x*blockDim.y*blockDim.z, warpSize))
+#define __global_warp_id (__numwarps_in_block * __global_blockIdx + __local_warp_id)
 #endif // __CUDACC__
 
 

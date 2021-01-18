@@ -14,7 +14,7 @@ __global__ void utilitykernel::init_table(int no_of_buckets, Address * base_slab
 	int warp_id = __global_warp_id;
 	while (warp_id < no_of_buckets) {
 		base_slabs[warp_id] = rb.warp_allocate();
-		warp_id += gridDim.x;
+		warp_id += __numwarps_in_block * gridDim.x * gridDim.y * gridDim.z;
 	}
 }
 
@@ -61,7 +61,10 @@ __device__ void HashTableOperation::run(const Instruction::Type type, const uint
 			next = hashtable->base_slabs[src_bucket];
 			old_work_queue = work_queue;
 		}
-		s_read_data[threadIdx.x] = SlabAlloc::ReadSlab(next, __laneID);
+		s_read_data[__block_threadIdx] = SlabAlloc::ReadSlab(next, __laneID);
+		/*if (next == 29299) {
+			printf("slab 29299 has %d at %d\n", s_read_data[__block_threadIdx], __laneID);
+		}*/
 		switch(src_instrtype) {
 			case Instruction::Insert:
 				inserter(s_read_data, src_key, src_value, src_lane, work_queue, next);
@@ -77,7 +80,7 @@ __device__ void HashTableOperation::run(const Instruction::Type type, const uint
 }
 
 /*__device__ void HashTableOperation::searcher(uint32_t s_read_data[], uint32_t src_key, int src_lane, uint32_t &work_queue, Address &next) {
-	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == src_key));
+	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[__block_threadIdx] == src_key));
 	if(__laneID == src_lane) {
 		if(found_lane != 0) {
 			--found_lane;
@@ -99,7 +102,7 @@ __device__ void HashTableOperation::run(const Instruction::Type type, const uint
 }*/
 
 __device__ __forceinline__ void HashTableOperation::inserter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
-	auto dest_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == EMPTY_KEY));
+	auto dest_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[__block_threadIdx] == EMPTY_KEY));
 	if(dest_lane != 0){
 		--dest_lane;
 		if(__laneID == src_lane) {
@@ -130,7 +133,7 @@ __device__ __forceinline__ void HashTableOperation::inserter(uint32_t s_read_dat
 }
 
 __device__ __forceinline__ void HashTableOperation::deleter(uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane, uint32_t &work_queue, Address &next) {
-	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[threadIdx.x] == src_key && s_read_data[threadIdx.x + 1] == src_value));
+	auto found_lane = __ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[__block_threadIdx] == src_key && s_read_data[__block_threadIdx + 1] == src_value));
 	if(__laneID == src_lane) {
 		if(found_lane != 0) {
 			--found_lane;
@@ -163,7 +166,7 @@ __host__ __device__ void HashTable::findvalues(uint32_t * d_keys, unsigned no_of
 // do all the collation of the found values into an array
 __global__ void utilitykernel::findvalueskernel(uint32_t* d_keys, unsigned no_of_keys, Address* base_slabs,
 								unsigned no_of_buckets,	void (*callback)(uint32_t key, uint32_t value), HashTable *table) {
-    for (int i = __global_warp_id; i < no_of_keys; i += CEILDIV(blockDim.x, warpSize)) {
+    for (int i = __global_warp_id; i < no_of_keys; i += __numwarps_in_block) {
 		table->findvalue(d_keys[__global_warp_id], callback);
 	}
 }
@@ -173,6 +176,7 @@ __device__ void HashTable::findvalue(uint32_t key, void (*callback)(uint32_t key
 	Address next = base_slabs[src_bucket];
 	while(next != EMPTY_ADDRESS) {
 		uint32_t read_data = SlabAlloc::ReadSlab(next, __laneID);
+		//printf("next: %x -> %x, key -> %d, laneid -> %d\n", next, read_data, key, threadIdx.y);
 		uint32_t next_lane_data = __shfl_down_sync(WARP_MASK, read_data, 1);
 		uint32_t found_key_lanes = __ballot_sync(VALID_KEY_MASK, read_data == key);
 		if(found_key_lanes & 1 << __laneID ) {

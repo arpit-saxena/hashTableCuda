@@ -177,7 +177,7 @@ __device__ void updateHashTable(int triangleIndex, int meshIndex, Voxel oldVoxel
     HashTableOperation op(table, &rb);
     bool is_active = meshIndex == 1 && oldVoxel.index != newVoxel.index;
     // ^ meshIndex == 1 is since a warp may have triangles from the other mesh too
-    
+
     op.run(Instruction::Type::Delete, oldVoxel.index, triangleIndex, is_active);
 	op.run(Instruction::Type::Insert, newVoxel.index, triangleIndex, is_active);
 }
