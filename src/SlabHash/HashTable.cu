@@ -88,28 +88,6 @@ __device__ void HashTableOperation::run(const Instruction::Type type,
   }
 }
 
-/*__device__ void HashTableOperation::searcher(uint32_t s_read_data[], uint32_t
-src_key, int src_lane, uint32_t &work_queue, Address &next) { auto found_lane =
-__ffs(__ballot_sync(VALID_KEY_MASK, s_read_data[__block_threadIdx] == src_key));
-        if(__laneID == src_lane) {
-                if(found_lane != 0) {
-                        --found_lane;
-                        uint32_t found_value =
-s_read_data[__local_warp_id*warpSize + found_lane + 1]; instr->value =
-found_value; work_queue &= ~((uint32_t)(1<<__laneID));
-                }
-                else{
-                        auto next_ptr = s_read_data[__local_warp_id*warpSize +
-ADDRESS_LANE]; if(next_ptr == EMPTY_ADDRESS) { instr->value = SEARCH_NOT_FOUND;
-                                work_queue &= ~((uint32_t)(1<<__laneID));
-                        }
-                        else{
-                                next = next_ptr;
-                        }
-                }
-        }
-}*/
-
 __device__ __forceinline__ void HashTableOperation::inserter(
     uint32_t s_read_data[], uint32_t src_key, uint32_t src_value, int src_lane,
     uint32_t &work_queue, Address &next) {

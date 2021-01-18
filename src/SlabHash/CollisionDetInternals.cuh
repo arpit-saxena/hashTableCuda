@@ -39,8 +39,6 @@ __device__ __host__ void updatePositionVertex(float vertex[3],
 __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i);
 void transformAndResetBox();
 
-// __global__ void updateHashTable(Mesh *m, int mesh_i);
-// __global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box);
 __global__ void markCollidingTriangles();
 
 __device__ void updateHashTable(int triangleIndex, int meshIndex,

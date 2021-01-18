@@ -25,9 +25,6 @@ FILE(GLOB_RECURSE RENDER_SOURCES
 	render/include/*.cuh
 )
 
-#include(${CMAKE_BINARY_DIR}/build/conanbuildinfo.cmake)
-#conan_basic_setup()
-
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/assimp/")
 find_package(ASSIMP REQUIRED)
 include_directories(${ASSIMP_INCLUDE_DIRS})

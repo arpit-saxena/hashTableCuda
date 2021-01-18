@@ -134,26 +134,6 @@ __device__ __host__ Voxel getVoxel(float point[3]) {
   return v;
 }
 
-// This works for translation matrices. Not sure if it will work for rotation
-// matrices
-/* __device__ void updatePosition(Triangle *t, int mesh_i) {
-        // Maybe this can be improved, but its a really small matrix
-        Triangle t2;
-        for (int vertex_i = 0; vertex_i < 3; vertex_i++) {
-                for (int i = 0; i < 3; i++) {
-                        float ans = 0.0f;
-                        for (int j = 0; j < 3; j++) {
-                                ans += trans_mat[mesh_i][i][j] *
-t->vertices[vertex_i][j];
-                        }
-                        ans += trans_mat[mesh_i][i][3]; // Since the position
-vector has 1 in 4th place t2.vertices[vertex_i][i] = ans;
-                }
-        }
-
-        memcpy(t, &t2, sizeof(Triangle));
-} */
-
 __device__ __host__ void updatePositionVertex(float vertex[3],
                                               glm::mat4 *trans_mat) {
   glm::vec4 pt = glm::vec4(vertex[0], vertex[1], vertex[2], 1.0f);
@@ -162,27 +142,6 @@ __device__ __host__ void updatePositionVertex(float vertex[3],
   vertex[1] = pt.y;
   vertex[2] = pt.z;
 }
-
-/* __global__ void updateHashTable(Mesh *m, int mesh_i) {
-        // FIXME: Assuming enough threads are available
-        uint32_t triangle_i = blockDim.x * blockIdx.x + threadIdx.x;
-        Triangle *t;
-        Voxel oldVoxel, newVoxel;
-        if (triangle_i < m->numTriangles) {
-                t = &m->triangles[triangle_i];
-                oldVoxel = getVoxel(t);
-                updatePosition(t, mesh_i);
-                newVoxel = getVoxel(t);
-        }
-        __syncwarp();
-
-        ResidentBlock rb;
-        HashTableOperation op(&table, &rb);
-        const bool is_active = triangle_i < m->numTriangles && oldVoxel !=
-newVoxel; op.run(Instruction::Type::Delete, oldVoxel.index, triangle_i,
-is_active); op.run(Instruction::Type::Insert, newVoxel.index, triangle_i,
-is_active);
-} */
 
 __device__ void updateHashTable(int triangleIndex, int meshIndex,
                                 Voxel oldVoxel, Voxel newVoxel) {
@@ -195,27 +154,11 @@ __device__ void updateHashTable(int triangleIndex, int meshIndex,
   op.run(Instruction::Type::Insert, newVoxel.index, triangleIndex, is_active);
 }
 
-/* // Assumes bounding box array has already been reset, and position updated
-__global__ void updateBoundingBox(Mesh *m, int mesh_i, BoundingBox *box) {
-        // FIXME: Assuming enough threads are available
-        uint32_t triangle_i = blockDim.x * blockIdx.x + threadIdx.x;
-        if (triangle_i < m->numTriangles) {
-                Triangle *t = &m->triangles[triangle_i];
-                updatePosition(t, mesh_i);
-                Voxel v = getVoxel(t);
-                box->setOccupied(Voxel v);
-        }
-} */
-
 // Assumes bounding box array has already been reset, and position updated
 __device__ void updateBoundingBox(Triangle *t) {
   Voxel v = getVoxel(t);
   box->setOccupied(v);
 }
-
-/* __device__ void markCollision(uint32_t voxel_i, uint32_t triangle_i) {
-        //TODO
-} */
 
 __global__ void markCollidingTriangles() {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
