@@ -3,15 +3,17 @@
                                  // sprintf_s instead of sprintf
 #endif
 
+#include <glad/glad.h>
+
+#include "render.cuh"
+// Has to come after glad import
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
-#include <glad/glad.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 
-#include "render.cuh"
 #include "shader_s.h"
 
 glm::mat4* CUDA::trans_mats = nullptr;
