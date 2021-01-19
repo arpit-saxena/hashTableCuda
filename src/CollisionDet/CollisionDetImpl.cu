@@ -1,7 +1,8 @@
 #include <assert.h>
 
-#include "SlabHash/CollisionDetInternals.cuh"
-#include "render.cuh"
+#include "CollisionDet/CollisionDetImpl.cuh"
+#include "CollisionDet/CollisionDetInterface.cuh"
+#include "CollisionDet/CollisionMarker.cuh"
 
 __device__ BoundingBox *box;
 __device__ HashTable *table;

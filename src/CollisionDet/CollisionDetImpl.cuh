@@ -1,8 +1,8 @@
-#ifndef COLLISIONDETINTERNALS_CUH
-#define COLLISIONDETINTERNALS_CUH
+#ifndef COLLSION_DET_IMPL_CUH
+#define COLLSION_DET_IMPL_CUH
 
-#include "HashTable.cuh"
-#include "Importer.cuh"
+#include "CollisionDet/Importer.cuh"
+#include "SlabHash/HashTable.cuh"
 
 struct Voxel {
   // from LSB: first 10 bits are x index, middle 10 bits are y index, last 10
@@ -45,4 +45,4 @@ __device__ void updateHashTable(int triangleIndex, int meshIndex,
                                 Voxel oldVoxel, Voxel newVoxel);
 __device__ void updateBoundingBox(Triangle *t);
 
-#endif /* COLLISIONDETINTERNALS_CUH */
+#endif /* COLLSION_DET_IMPL_CUH */

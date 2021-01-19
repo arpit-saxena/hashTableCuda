@@ -15,8 +15,10 @@ FILE(GLOB_RECURSE SLABHASH_SOURCES
 	src/SlabHash/*.cpp
 	src/SlabHash/*.h
 	src/*.h
+	src/*.cu*
 	src/SlabHash/*.cu
 	src/SlabHash/*.cuh
+	src/CollisionDet/*
 )
 
 FILE(GLOB_RECURSE RENDER_SOURCES

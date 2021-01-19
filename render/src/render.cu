@@ -14,9 +14,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 
+#include "CollisionDet/CollisionMarker.cuh"
+#include "Utils.cuh"
 #include "shader_s.h"
-
-glm::mat4* CUDA::trans_mats = nullptr;
 
 namespace {
 float lightcubevertices[] = {
@@ -138,23 +138,6 @@ __host__ void CUDA::launch_kernel(Triangle* buffer[2], unsigned numTriangles[2],
       buffer[0], buffer[1], numTriangles[0], numTriangles[1],
       meshes[0].triangles, meshes[1].triangles, d_h, transformation_mat);
   gpuErrchk(cudaDeviceSynchronize());
-}
-
-__device__ void CUDA::transform(Triangle* t,
-                                const glm::mat4 transformation_mat) {
-  for (int i = 0; i < 3; ++i) {
-    Vertex* v = t->vertices + i;
-    glm::vec4 pt = glm::vec4(v->point[0], v->point[1], v->point[2], 1.0f);
-    glm::vec4 nm = glm::vec4(v->normal[0], v->normal[1], v->normal[2], 1.0f);
-    pt = transformation_mat * pt;
-    nm = transformation_mat * nm;
-    v->point[0] = pt.x;
-    v->normal[0] = nm.x;
-    v->point[1] = pt.y;
-    v->normal[1] = nm.y;
-    v->point[2] = pt.z;
-    v->normal[2] = nm.z;
-  }
 }
 
 __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1,
