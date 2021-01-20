@@ -44,9 +44,16 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
   glViewport(0, 0, width, height);
 }
 
-void processInput(GLFWwindow* window) {
-  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+bool pause = false;
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action,
+                  int mods) {
+  if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
+    pause = !pause;
+  }
+  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, true);
+  }
 }
 
 float getCurrAspectRatio() {
@@ -369,6 +376,7 @@ int OpenGLScene::render() {
 
   glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
   glfwSetMouseButtonCallback(window, mouse);
+  glfwSetKeyCallback(window, key_callback);
 
   Shader sh("render/Shaders/shader.vs", "render/Shaders/shader.fs");
   sh.use();
@@ -401,20 +409,21 @@ int OpenGLScene::render() {
   CUDA::initCollisionDet(this->meshes);
 
   while (!glfwWindowShouldClose(window)) {
+    double framerate = 0.0;
     double currentTime = glfwGetTime();
     nbFrames++;
-    if (currentTime - lastTime >= step) {  // After atleast 1 sec has elapsed
-      char titlestr[30];
-      sprintf(titlestr, "hashTableCuda | FPS=%.2f",
-              (double)nbFrames / (currentTime - lastTime));
-      glfwSetWindowTitle(window, titlestr);
-      nbFrames = 0;
-      lastTime = currentTime;
+    if (!::pause) {
+      if (currentTime - lastTime >= step) {  // After atleast 1 sec has elapsed
+        char titlestr[30];
+        framerate = (double)nbFrames / (currentTime - lastTime);
+        sprintf(titlestr, "hashTableCuda | FPS=%.2f", framerate);
+        glfwSetWindowTitle(window, titlestr);
+        nbFrames = 0;
+        lastTime = currentTime;
+      }
+
+      this->runCuda();
     }
-
-    this->runCuda();
-
-    ::processInput(window);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
