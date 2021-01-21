@@ -262,7 +262,7 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1,
     if (meshindex <= 1) {
       buffer[triangleindex] = *currtriangle;
       for (int i = 0; i < 3; ++i) {
-          currtriangle->vertices[i].hasCollided = 0.0f;
+        currtriangle->vertices[i].hasCollided = 0.0f;
       }
     }
 
@@ -413,8 +413,14 @@ void OpenGLScene::draw() {
   sh->setMatrix4fv("model", model);
 
   for (int i = 0; i < 2; ++i) {
+    if (i == 0) {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
     glBindVertexArray(VAO[i]);
     glDrawArrays(GL_TRIANGLES, 0, this->meshes[i].numTriangles * 3);
+    if (i == 0) {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
   }
   glBindVertexArray(0);
 }
