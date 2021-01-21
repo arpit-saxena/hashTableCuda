@@ -261,6 +261,9 @@ __global__ void CUDA::triangleKernel(Triangle* buffer0, Triangle* buffer1,
                                  transformation_mat[meshindex]);
     if (meshindex <= 1) {
       buffer[triangleindex] = *currtriangle;
+      for (int i = 0; i < 3; ++i) {
+          currtriangle->vertices[i].hasCollided = 0.0f;
+      }
     }
 
     global_thread_id += gridDim.x * blockDim.x;
