@@ -16,15 +16,18 @@ __host__ void initHashTable(int numBuckets) {
   gpuErrchk(cudaMemcpyToSymbol(table, &d_table, sizeof(HashTable *)));
 }
 
-// mesh object is in host memory but it's triangles array is stored device
-// memory
-__host__ void initBoundingBox(Mesh mesh) {
-  Triangle *h_triangles =
-      (Triangle *)malloc(mesh.numTriangles * sizeof(Triangle));
-  gpuErrchk(cudaMemcpy(h_triangles, mesh.triangles,
-                       mesh.numTriangles * sizeof(Triangle),
-                       cudaMemcpyDefault));
+__host__ __device__ void printVertex(float arr[3], const char *message) {
+  printf(message);
+  for (int i = 0; i < 3; i++) {
+    printf("%f ", arr[i]);
+  }
+  printf("\n");
+}
 
+// Takes in an array of triangles and returns a bounding box with its end points
+// (start_vertex and end_vertex) set
+__host__ BoundingBox getBoundingBoxEndPoints(Triangle *h_triangles,
+                                             int numTriangles) {
   // If this is a bottleneck, look into GPU based algo for finding minimum
   // Though since this is run only once, CPU based should be fine
   BoundingBox h_box;
@@ -36,7 +39,7 @@ __host__ void initBoundingBox(Mesh mesh) {
 
   float centroid[3];
   // printf("Mesh 0 centroids:\n");
-  for (int i = 0; i < mesh.numTriangles; i++) {
+  for (int i = 0; i < numTriangles; i++) {
     for (int j = 0; j < 3; j++) {
       centroid[j] = 0.0f;
       for (int k = 0; k < 3; k++) {
@@ -57,12 +60,23 @@ __host__ void initBoundingBox(Mesh mesh) {
       }
     }
   }
-  // printf("\n\n");
 
-  // printf("Bounding box:\n");
-  // printf("\tStart: %f %f %f\n", h_box.start_vertex[0], h_box.start_vertex[1],
-  // h_box.start_vertex[2]); printf("\tEnd: %f %f %f\n\n", h_box.end_vertex[0],
-  // h_box.end_vertex[1], h_box.end_vertex[2]);
+  // printVertex(h_box.start_vertex, "Start vertex: ");
+  // printVertex(h_box.end_vertex, "End vertex: ");
+
+  return h_box;
+}
+
+// mesh object is in host memory but it's triangles array is stored device
+// memory
+__host__ void initBoundingBox(Mesh mesh) {
+  Triangle *h_triangles =
+      (Triangle *)malloc(mesh.numTriangles * sizeof(Triangle));
+  gpuErrchk(cudaMemcpy(h_triangles, mesh.triangles,
+                       mesh.numTriangles * sizeof(Triangle),
+                       cudaMemcpyDefault));
+
+  BoundingBox h_box = getBoundingBoxEndPoints(h_triangles, mesh.numTriangles);
 
   h_box.start_i = getVoxel(h_box.start_vertex).index;
 
@@ -81,10 +95,9 @@ __host__ void initBoundingBox(Mesh mesh) {
   h_box.size[2] = CEILDIV(h_box.size[2], 32) * 32;
   capacity[2] = CEILDIV(tmp_size + 2, 32) * 32;
 
-  h_box.totalCapacity = (capacity[0] * capacity[1] * capacity[2]) / 32;
+  h_box.arraySize = (capacity[0] * capacity[1] * capacity[2]) / 32;
 
-  gpuErrchk(
-      cudaMalloc(&h_box.occupied, h_box.totalCapacity * sizeof(uint32_t)));
+  gpuErrchk(cudaMalloc(&h_box.occupied, h_box.arraySize * sizeof(uint32_t)));
 
   BoundingBox *d_box;
   gpuErrchk(cudaMalloc(&d_box, sizeof(BoundingBox)));
@@ -102,7 +115,7 @@ __device__ void BoundingBox::setOccupied(Voxel v) {
   int y = ((v.index >> 10) & mask) - ((start_i >> 10) & mask);
   int z = ((v.index >> 20) & mask) - ((start_i >> 20) & mask);
   // TODO: Can we just do v.index - start_i?
-  assert(((x * size[0] + y) * size[1] + z) / 32 < totalCapacity);
+  assert(((x * size[0] + y) * size[1] + z) / 32 < arraySize);
   occupied[((x * size[0] + y) * size[1] + z) / 32] |= 1u << (z % 32);
 }
 
@@ -177,20 +190,24 @@ __global__ void markCollidingTriangles() {
         // a triangle of mesh 0 resides. For each search voxel, we wish to find
         // all triangles of mesh 1 by searching the hash table
 
+        float voxelMidpoint[3];
+        for (int j = 0; j < 3; j++) {
+          voxelMidpoint[j] = box->start_vertex[j] + Voxel::SIZE / 2;
+        }
+
+        voxelMidpoint[0] += x * Voxel::SIZE;
+        voxelMidpoint[1] += y * Voxel::SIZE;
+        voxelMidpoint[2] += (z - z % 32 - 1) * Voxel::SIZE;
+        // -1 is because each iteration of the loop adds Voxel::SIZE
+
         for (int i = 0; i < 32; i++) {
           assert(__activemask() == WARP_MASK);
           bool is_active = isOccupied & (1 << i);
           if (!is_active)
             continue;  //< No divergence since all lanes have same is_active
           assert(__activemask() == WARP_MASK);
-          float voxelMidpoint[3];
-          for (int j = 0; j < 3; j++) {
-            voxelMidpoint[j] = box->start_vertex[j] + Voxel::SIZE / 2;
-          }
 
-          voxelMidpoint[0] += x * Voxel::SIZE;
-          voxelMidpoint[1] += y * Voxel::SIZE;
-          voxelMidpoint[2] += (z - z % 32 + i) * Voxel::SIZE;
+          voxelMidpoint[2] += Voxel::SIZE;
 
           if (voxelMidpoint[2] >= 1) continue;
 
@@ -229,8 +246,7 @@ __host__ void transformAndResetBox() {
   }
   h_box.size[2] = CEILDIV(h_box.size[2], 32) * 32;
 
-  gpuErrchk(
-      cudaMemset(h_box.occupied, 0, h_box.totalCapacity * sizeof(uint32_t)));
+  gpuErrchk(cudaMemset(h_box.occupied, 0, h_box.arraySize * sizeof(uint32_t)));
 
   gpuErrchk(cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault));
   gpuErrchk(cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)));
