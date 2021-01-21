@@ -45,12 +45,42 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 }
 
 bool pause = false;
+int direction_key = 0;
+
+int glfw_key_to_int(int key) {
+  switch (key) {
+    case GLFW_KEY_RIGHT:
+    case GLFW_KEY_D:
+      return 1 << 0;
+    case GLFW_KEY_LEFT:
+    case GLFW_KEY_A:
+      return 1 << 1;
+    case GLFW_KEY_UP:
+    case GLFW_KEY_W:
+      return 1 << 2;
+    case GLFW_KEY_DOWN:
+    case GLFW_KEY_S:
+      return 1 << 3;
+    default:
+      return 0;
+  }
+}
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action,
                   int mods) {
+  // Direction keys for camera control
+  if (action == GLFW_PRESS) {
+    direction_key |= glfw_key_to_int(key);
+  } else if (action == GLFW_RELEASE) {
+    direction_key &= ~glfw_key_to_int(key);
+  }
+
+  // pause/play using spacebar
   if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
     pause = !pause;
   }
+
+  // close window by pressing esc
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, true);
   }
@@ -65,7 +95,8 @@ float getCurrAspectRatio() {
 double mouse_old_x, mouse_old_y;
 int mouse_buttons = 0;
 double rotate_x = 0.0, rotate_y = 0.0;
-double translate_z = -3.0;
+double target_x = 0.0, target_y = 0.0, target_z = 0.0;
+double camera_z = 3.0;
 
 void motion(GLFWwindow* window) {
   double x, y;
@@ -73,12 +104,27 @@ void motion(GLFWwindow* window) {
   double dx, dy;
   dx = x - mouse_old_x;
   dy = y - mouse_old_y;
+  const double direction_key_movement_speed = 0.001;
 
   if (mouse_buttons & (1 << GLFW_MOUSE_BUTTON_LEFT)) {
-    rotate_x += dy * 0.2;
-    rotate_y += dx * 0.2;
+    rotate_x -= dy * 0.2;
+    rotate_y -= dx * 0.2;
   } else if (mouse_buttons & (1 << GLFW_MOUSE_BUTTON_RIGHT)) {
-    translate_z += dy * 0.01f;
+    camera_z -= dy * 0.01f;
+  }
+  if (direction_key != -1) {
+    if (direction_key & glfw_key_to_int(GLFW_KEY_RIGHT)) {
+      target_x += direction_key_movement_speed;
+    }
+    if (direction_key & glfw_key_to_int(GLFW_KEY_LEFT)) {
+      target_x -= direction_key_movement_speed;
+    }
+    if (direction_key & glfw_key_to_int(GLFW_KEY_UP)) {
+      target_y += direction_key_movement_speed;
+    }
+    if (direction_key & glfw_key_to_int(GLFW_KEY_DOWN)) {
+      target_y -= direction_key_movement_speed;
+    }
   }
   mouse_old_x = x;
   mouse_old_y = y;
@@ -93,12 +139,26 @@ void mouse(GLFWwindow* window, int button, int action, int mods) {
 }
 
 glm::mat4 makeViewMat() {
-  glm::mat4 view = glm::mat4(1.0f);
-  view = glm::translate(view, glm::vec3(0.0, 0.0, translate_z));
-  view = glm::rotate(view, (float)glm::radians(rotate_x),
-                     glm::vec3(1.0, 0.0, 0.0));
-  view = glm::rotate(view, (float)glm::radians(rotate_y),
-                     glm::vec3(0.0, 1.0, 0.0));
+  glm::vec3 targetPos = glm::vec3(target_x, target_y, target_z),
+            cameraFront = glm::vec3(0.0f, 0.0f, target_z - camera_z),
+            cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+  cameraFront = glm::rotate(glm::mat4(1.0f), (float)glm::radians(rotate_x),
+                            glm::vec3(1.0, 0.0, 0.0)) *
+                glm::vec4(cameraFront, 1.0f);
+  cameraFront = glm::rotate(glm::mat4(1.0f), (float)glm::radians(rotate_y),
+                            glm::vec3(0.0, 1.0, 0.0)) *
+                glm::vec4(cameraFront, 1.0f);
+
+  cameraUp = glm::rotate(glm::mat4(1.0f), (float)glm::radians(rotate_x),
+                         glm::vec3(1.0, 0.0, 0.0)) *
+             glm::vec4(cameraUp, 1.0f);
+  cameraUp = glm::rotate(glm::mat4(1.0f), (float)glm::radians(rotate_y),
+                         glm::vec3(0.0, 1.0, 0.0)) *
+             glm::vec4(cameraUp, 1.0f);
+
+  glm::vec3 cameraPos = targetPos - cameraFront;
+  glm::mat4 view = glm::lookAt(cameraPos, targetPos, cameraUp);
   return view;
 }
 
