@@ -96,7 +96,8 @@ double mouse_old_x, mouse_old_y;
 int mouse_buttons = 0;
 double rotate_x = 0.0, rotate_y = 0.0;
 double target_x = 0.0, target_y = 0.0, target_z = 0.0;
-double camera_z = 3.0;
+double cameraFront_z = -3.0;
+double delta_target_x = 0.0, delta_target_y = 0.0;
 
 void motion(GLFWwindow* window) {
   double x, y;
@@ -110,21 +111,21 @@ void motion(GLFWwindow* window) {
     rotate_x -= dy * 0.2;
     rotate_y -= dx * 0.2;
   } else if (mouse_buttons & (1 << GLFW_MOUSE_BUTTON_RIGHT)) {
-    camera_z -= dy * 0.01f;
+    cameraFront_z += dy * 0.01f;
   }
   if (direction_key != -1) {
     if (direction_key & glfw_key_to_int(GLFW_KEY_RIGHT)) {
-      target_x += direction_key_movement_speed;
-    }
-    if (direction_key & glfw_key_to_int(GLFW_KEY_LEFT)) {
-      target_x -= direction_key_movement_speed;
-    }
+      delta_target_x = direction_key_movement_speed;
+    } else if (direction_key & glfw_key_to_int(GLFW_KEY_LEFT)) {
+      delta_target_x = -direction_key_movement_speed;
+    } else
+      delta_target_x = 0.0;
     if (direction_key & glfw_key_to_int(GLFW_KEY_UP)) {
-      target_y += direction_key_movement_speed;
-    }
-    if (direction_key & glfw_key_to_int(GLFW_KEY_DOWN)) {
-      target_y -= direction_key_movement_speed;
-    }
+      delta_target_y = direction_key_movement_speed;
+    } else if (direction_key & glfw_key_to_int(GLFW_KEY_DOWN)) {
+      delta_target_y = -direction_key_movement_speed;
+    } else
+      delta_target_y = 0.0;
   }
   mouse_old_x = x;
   mouse_old_y = y;
@@ -139,9 +140,21 @@ void mouse(GLFWwindow* window, int button, int action, int mods) {
 }
 
 glm::mat4 makeViewMat() {
-  glm::vec3 targetPos = glm::vec3(target_x, target_y, target_z),
-            cameraFront = glm::vec3(0.0f, 0.0f, target_z - camera_z),
+  glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, cameraFront_z),
             cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+  glm::vec3 delta_targetPos = glm::vec3(delta_target_x, delta_target_y, 0.0f);
+  delta_targetPos = glm::rotate(glm::mat4(1.0f), (float)glm::radians(-rotate_x),
+                                glm::vec3(1.0, 0.0, 0.0)) *
+                    glm::vec4(delta_targetPos, 1.0f);
+  delta_targetPos = glm::rotate(glm::mat4(1.0f), (float)glm::radians(rotate_y),
+                                glm::vec3(0.0, 1.0, 0.0)) *
+                    glm::vec4(delta_targetPos, 1.0f);
+  target_x += delta_targetPos.x;
+  target_y += delta_targetPos.y;
+  target_z += delta_targetPos.z;
+
+  glm::vec3 targetPos = glm::vec3(target_x, target_y, target_z);
 
   cameraFront = glm::rotate(glm::mat4(1.0f), (float)glm::radians(rotate_x),
                             glm::vec3(1.0, 0.0, 0.0)) *
