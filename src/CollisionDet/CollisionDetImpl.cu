@@ -171,8 +171,10 @@ __device__ void updateHashTable(int triangleIndex, int meshIndex,
 // Assumes bounding box array has already been reset, and position updated
 __device__ void updateBoundingBox(Triangle *t) {
   Voxel v = getVoxel(t);
-  box->setOccupied(v);
+  updateBoundingBox(v);
 }
+
+__device__ void updateBoundingBox(Voxel v) { box->setOccupied(v); }
 
 __global__ void markCollidingTriangles() {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
