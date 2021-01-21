@@ -136,6 +136,11 @@ __device__ Voxel getVoxel(Triangle *t) {
   return getVoxel(centroid);
 }
 
+__device__ __host__ Voxel getVoxel(glm::vec3 point) {
+  float f_point[3] = {point.x, point.y, point.z};
+  return getVoxel(f_point);
+}
+
 __device__ __host__ Voxel getVoxel(float point[3]) {
   Voxel v;
   for (int i = 0; i < 3; i++) {

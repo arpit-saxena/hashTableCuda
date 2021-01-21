@@ -18,6 +18,15 @@
 namespace CUDA {
 
 __device__ void transform(Triangle* t, const glm::mat4 transformation_mat);
+__device__ glm::vec3 transform_point(glm::vec3 point,
+                                     const glm::mat4 transformation_mat);
+/*
+ * Samples a point deterministically (based on i and j) inside a triangle
+ * i and j must be < numPoints, or the point sampled will be outside the
+ * triangle
+ */
+__device__ glm::vec3 sampleAPoint(int i, int j, int numPoints,
+                                  Triangle* triangle);
 
 }  // namespace CUDA
 

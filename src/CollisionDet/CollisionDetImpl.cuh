@@ -32,6 +32,7 @@ __host__ void initHashTable(int numBuckets);
 __host__ void initBoundingBox(Mesh mesh);
 
 __device__ Voxel getVoxel(Triangle *t);
+__device__ __host__ Voxel getVoxel(glm::vec3);
 __device__ __host__ Voxel getVoxel(float v[3]);
 // __device__ void updatePosition(Triangle *t, int mesh_i);
 __device__ __host__ void updatePositionVertex(float vertex[3],
@@ -44,5 +45,6 @@ __global__ void markCollidingTriangles();
 __device__ void updateHashTable(int triangleIndex, int meshIndex,
                                 Voxel oldVoxel, Voxel newVoxel);
 __device__ void updateBoundingBox(Triangle *t);
+__device__ void updateBoundingBox(Voxel v);
 
 #endif /* COLLSION_DET_IMPL_CUH */
