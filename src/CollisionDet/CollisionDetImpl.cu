@@ -115,12 +115,12 @@ __device__ void BoundingBox::setOccupied(Voxel v) {
   int y = ((v.index >> 10) & mask) - ((start_i >> 10) & mask);
   int z = ((v.index >> 20) & mask) - ((start_i >> 20) & mask);
   // TODO: Can we just do v.index - start_i?
-  assert(((x * size[0] + y) * size[1] + z) / 32 < arraySize);
-  occupied[((x * size[0] + y) * size[1] + z) / 32] |= 1u << (z % 32);
+  assert(((x * size[1] + y) * size[2] + z) / 32 < arraySize);
+  occupied[((x * size[1] + y) * size[2] + z) / 32] |= 1u << (z % 32);
 }
 
 __device__ uint32_t BoundingBox::getOccupied(int x, int y, int z) {
-  return occupied[((x * size[0] + y) * size[1] + z) / 32];
+  return occupied[((x * size[1] + y) * size[2] + z) / 32];
 }
 
 // Gets a voxel of a triangle.
