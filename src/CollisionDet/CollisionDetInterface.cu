@@ -37,27 +37,66 @@ __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
   return collisionHappened;
 }
 
+// namespace {
+//__global__ void sampleTriangleAndUpdate(const int numPoints, Triangle*
+// triangle,
+//                                        Triangle oldTriangle,
+//                                        const int triangleIndex,
+//                                        int meshIndex) {
+//  int global_thread_id = __global_warp_id * warpSize + __laneID;
+//  const unsigned maxThreadsToRun =
+//      CEILDIV(numPoints * numPoints, warpSize) * warpSize;
+//  while (global_thread_id < maxThreadsToRun) {
+//    Voxel oldVoxel, newVoxel;
+//    if (global_thread_id < numPoints * numPoints) {
+//      int i = global_thread_id / numPoints, j = global_thread_id % numPoints;
+//      if (triangle != nullptr) {
+//        auto sampledPoint = CUDA::sampleAPoint(i, j, numPoints, &oldTriangle);
+//        oldVoxel = getVoxel(sampledPoint);
+//        sampledPoint = CUDA::sampleAPoint(i, j, numPoints, triangle);
+//        newVoxel = getVoxel(sampledPoint);
+//      }
+//    } else {
+//      meshIndex = 2;  // So that this thread doesn't update the hashtable
+//    }
+//    __syncwarp();
+//    updateHashTable(triangleIndex, meshIndex, oldVoxel, newVoxel);
+//
+//    if (meshIndex == 0) updateBoundingBox(newVoxel);  // FIXME: DIVERGENCE!
+//    global_thread_id += gridDim.x * blockDim.x;
+//  }
+//}
+//}  // namespace
+
 __device__ void CUDA::updateTrianglePosition(
     Triangle* triangle, int triangleIndex, int meshIndex, HashTable* d_h,
     const glm::mat4 transformationMat) {
   // numPoints^2 points will be sampled from the triangle
-  const int numPoints = 2;
-  Voxel oldVoxel, newVoxel;
+  const int numPoints = 1;
+
+  Triangle oldTriangle;
+  if (triangle != nullptr) {
+    oldTriangle = *triangle;
+    transform(triangle, transformationMat);
+  }
+
+  /*int threadsPerBlock = THREADS_PER_BLOCK,
+      numBlocks = CEILDIV(numPoints * numPoints, threadsPerBlock);
+  ::sampleTriangleAndUpdate<<<numBlocks, threadsPerBlock>>>(
+      numPoints, triangle, oldTriangle, triangleIndex, meshIndex);*/
 
   for (int i = 0; i < numPoints; ++i) {
     for (int j = 0; j < numPoints; ++j) {
+      Voxel oldVoxel, newVoxel;
       if (triangle != nullptr) {
-        auto sampledPoint = sampleAPoint(i, j, numPoints, triangle);
+        auto sampledPoint = sampleAPoint(i, j, numPoints, &oldTriangle);
         oldVoxel = getVoxel(sampledPoint);
-        sampledPoint = transform_point(sampledPoint, transformationMat);
+        sampledPoint = sampleAPoint(i, j, numPoints, triangle);
         newVoxel = getVoxel(sampledPoint);
       }
       updateHashTable(triangleIndex, meshIndex, oldVoxel, newVoxel);
 
       if (meshIndex == 0) updateBoundingBox(newVoxel);  // FIXME: DIVERGENCE!
     }
-  }
-  if (triangle != nullptr) {
-    transform(triangle, transformationMat);
   }
 }
