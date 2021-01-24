@@ -182,13 +182,13 @@ __device__ void updateBoundingBox(Triangle *t) {
 __device__ void updateBoundingBox(Voxel v) { box->setOccupied(v); }
 
 __global__ void markCollidingTriangles() {
-  int x = blockIdx.x * blockDim.x + threadIdx.x;
-  int y = blockIdx.y * blockDim.y + threadIdx.y;
-  int z = blockIdx.z * blockDim.z + threadIdx.z;
+  int global_x = blockIdx.x * blockDim.x + threadIdx.x;
+  int global_y = blockIdx.y * blockDim.y + threadIdx.y;
+  int global_z = blockIdx.z * blockDim.z + threadIdx.z;
 
-  for (; x < box->size[0]; x += gridDim.x * blockDim.x) {
-    for (; y < box->size[1]; y += gridDim.y * blockDim.y) {
-      for (; z < box->size[2]; z += gridDim.z * blockDim.z) {
+  for (int x = global_x; x < box->size[0]; x += gridDim.x * blockDim.x) {
+    for (int y = global_y; y < box->size[1]; y += gridDim.y * blockDim.y) {
+      for (int z = global_z; z < box->size[2]; z += gridDim.z * blockDim.z) {
         uint32_t isOccupied = box->getOccupied(x, y, z);
         ResidentBlock rb;
         HashTableOperation op(table, &rb);
