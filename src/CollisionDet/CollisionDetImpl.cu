@@ -7,6 +7,8 @@
 __device__ BoundingBox *box;
 __device__ HashTable *table;
 
+extern int boundingBoxNumVoxels;
+
 __host__ void initHashTable(int numBuckets) {
   SlabAlloc::init();
   HashTable *h_table = new HashTable(numBuckets);
@@ -96,6 +98,7 @@ __host__ void initBoundingBox(Mesh mesh) {
   capacity[2] = CEILDIV(tmp_size + 2, 32) * 32;
 
   h_box.arraySize = (capacity[0] * capacity[1] * capacity[2]) / 32;
+  boundingBoxNumVoxels = h_box.arraySize;
 
   gpuErrchk(cudaMalloc(&h_box.occupied, h_box.arraySize * sizeof(uint32_t)));
 
@@ -121,6 +124,12 @@ __device__ void BoundingBox::setOccupied(Voxel v) {
 
 __device__ uint32_t BoundingBox::getOccupied(int x, int y, int z) {
   return occupied[((x * size[1] + y) * size[2] + z) / 32];
+}
+
+__device__ uint32_t BoundingBox::getOccupied(int idx) {
+  assert(idx >= 0);
+  return (idx < arraySize) * occupied[idx];
+  // ^ Returns 0 for out of bound indices
 }
 
 // Gets a voxel of a triangle.
@@ -182,47 +191,56 @@ __device__ void updateBoundingBox(Triangle *t) {
 __device__ void updateBoundingBox(Voxel v) { box->setOccupied(v); }
 
 __global__ void markCollidingTriangles() {
-  int global_x = blockIdx.x * blockDim.x + threadIdx.x;
-  int global_y = blockIdx.y * blockDim.y + threadIdx.y;
-  int global_z = blockIdx.z * blockDim.z + threadIdx.z;
+  for (int idx = blockIdx.x * blockDim.x + threadIdx.x;
+       idx < box->arraySize * 32; idx += blockDim.x * gridDim.x) {
+    uint32_t isOccupied = box->getOccupied(idx / 32);
 
-  for (int x = global_x; x < box->size[0]; x += gridDim.x * blockDim.x) {
-    for (int y = global_y; y < box->size[1]; y += gridDim.y * blockDim.y) {
-      for (int z = global_z; z < box->size[2]; z += gridDim.z * blockDim.z) {
-        uint32_t isOccupied = box->getOccupied(x, y, z);
-        ResidentBlock rb;
-        HashTableOperation op(table, &rb);
+    // If the set of 32 voxels is completely unoccupied, quickly skip
+    if (!isOccupied) {
+      continue;  //< No divergence since isOccupied is same for all lanes
+    }
 
-        // For each set bit in isOccupied, we have an associated voxel in which
-        // a triangle of mesh 0 resides. For each search voxel, we wish to find
-        // all triangles of mesh 1 by searching the hash table
+    ResidentBlock rb;
+    HashTableOperation op(table, &rb);
 
-        float voxelMidpoint[3];
-        for (int j = 0; j < 3; j++) {
-          voxelMidpoint[j] = box->start_vertex[j] + Voxel::SIZE / 2;
-        }
+    // For each set bit in isOccupied, we have an associated voxel in which
+    // a triangle of mesh 0 resides. For each search voxel, we wish to find
+    // all triangles of mesh 1 by searching the hash table
 
-        voxelMidpoint[0] += x * Voxel::SIZE;
-        voxelMidpoint[1] += y * Voxel::SIZE;
-        voxelMidpoint[2] += (z - z % 32 - 1) * Voxel::SIZE;
-        // -1 is because each iteration of the loop adds Voxel::SIZE
+    float voxelMidpoint[3];
+    for (int j = 0; j < 3; j++) {
+      voxelMidpoint[j] = box->start_vertex[j];
+    }
 
-        for (int i = 0; i < 32; i++) {
-          assert(__activemask() == WARP_MASK);
-          bool is_active = isOccupied & (1 << i);
-          if (!is_active)
-            continue;  //< No divergence since all lanes have same is_active
-          assert(__activemask() == WARP_MASK);
+    // z is the fastest moving index followed by y and x.
+    int z = idx % box->size[2];
+    int y = (idx / box->size[2]) % box->size[1];
+    int x = idx / (box->size[1] * box->size[2]);
 
-          voxelMidpoint[2] += Voxel::SIZE;
+    // Here (x, y, z) represents index of a voxel with origin at the starting
+    // point of the bounding box
 
-          if (voxelMidpoint[2] >= 1) continue;
+    voxelMidpoint[0] += x * Voxel::SIZE;
+    voxelMidpoint[1] += y * Voxel::SIZE;
+    voxelMidpoint[2] += (z - z % 32 - 1) * Voxel::SIZE;
+    // -1 is because each iteration of the loop adds Voxel::SIZE
 
-          uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
+    for (int i = 0; i < 32; i++) {
+      assert(__activemask() == WARP_MASK);
+      bool is_active = isOccupied & (1 << i);
+      if (!is_active)
+        continue;  //< No divergence since all lanes have same is_active
+      assert(__activemask() == WARP_MASK);
 
-          table->findvalue(voxelIndex, collisionMarker::markCollision);
-        }
-      }
+      voxelMidpoint[2] += Voxel::SIZE;
+
+      assert(__activemask() == WARP_MASK);
+      if (voxelMidpoint[2] >= 1) break;
+
+      uint32_t voxelIndex = getVoxel(voxelMidpoint).index;
+
+      assert(__activemask() == WARP_MASK);
+      table->findvalue(voxelIndex, collisionMarker::markCollision);
     }
   }
 }

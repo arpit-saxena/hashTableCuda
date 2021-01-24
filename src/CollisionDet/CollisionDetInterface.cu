@@ -4,6 +4,7 @@
 #include "Utils.cuh"
 
 glm::mat4* CUDA::trans_mats = nullptr;
+int boundingBoxNumVoxels = 0;
 
 __global__ void testmarking() {
   int global_thread_id = blockDim.x * blockIdx.x + threadIdx.x;
@@ -29,8 +30,9 @@ __host__ bool CUDA::detectCollision(Mesh* d_meshes, HashTable* d_h) {
           return true;
   } */ // !< Hope this was just testing and 120 isn't sth important
 
-  dim3 threadsPerBlock = dim3(1, 1, THREADS_PER_BLOCK),
-       numBlocks = dim3(1, 1, 128);  // FIXME: Change this >.<
+  int threadsPerBlock = THREADS_PER_BLOCK,
+      numBlocks = /* CEILDIV(boundingBoxNumVoxels * 32, threadsPerBlock) */ 128;
+  // printf("%d %d\n", numBlocks, threadsPerBlock);
   markCollidingTriangles<<<numBlocks, threadsPerBlock>>>();
   gpuErrchk(cudaDeviceSynchronize());
   bool collisionHappened = false;
