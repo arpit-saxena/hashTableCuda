@@ -283,6 +283,13 @@ __host__ void transformAndResetBox() {
 
   gpuErrchk(cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault));
   gpuErrchk(cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)));
+
+#ifdef RENDER_BBOX
+  for (int i = 0; i < 3; ++i) {
+    render_bounding_box::start_vertex[i] = h_box.start_vertex[i];
+    render_bounding_box::end_vertex[i] = h_box.end_vertex[i];
+  }
+#endif  // RENDER_BBOX
 }
 
 __host__ void CUDA::checkBox(Mesh mesh) {

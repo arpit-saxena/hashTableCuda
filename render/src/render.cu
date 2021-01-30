@@ -40,6 +40,35 @@ float lightcubevertices[] = {
     0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f};
 const glm::vec3 lightPos = glm::vec3(1.2f, 1.0f, 2.0f);
 
+#ifdef RENDER_BBOX
+constexpr int numVertices_in_cube_mesh = 6 * 2 * 3 * 3;
+/*
+ * Generates the array that can be given to a VBO to render a cuboid
+ * start_vertex is the vertex of the cuboid having the lowest x,y and z
+ * coordinates
+ * end_vertex is the vertex of the cuboid having the highest x,y and
+ * z coordinates
+ * dest should be an array having size equal to
+ * numVertices_in_cube_mesh * sizeof(float) bytes
+ */
+void getcuboidmeshvertices(float* dest, const float start_vertex[3],
+                           const float end_vertex[3]) {
+  // Could use lightcubevertices by transforming all its vertices to fit the
+  // desired cuboid, but I'm scared of FP operations messing up due to their
+  // non-associativity
+  if (dest == nullptr) {
+    return;
+  }
+  for (int i = 0; i < numVertices_in_cube_mesh / 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      const float* vertex =
+          (lightcubevertices[3 * i + j] < 0 ? start_vertex : end_vertex);
+      dest[3 * i + j] = vertex[j];
+    }
+  }
+}
+#endif  // RENDER_BBOX
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
   glViewport(0, 0, width, height);
 }
@@ -206,7 +235,51 @@ void drawlightingCube(GLuint lightCubeVAO, Shader* lightCubeShader) {
   glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
+#ifdef RENDER_BBOX
+void prepdrawbbox(GLuint& bboxVAO, GLuint& bboxVBO,
+                  size_t sizeof_bbox_vertices = numVertices_in_cube_mesh *
+                                                sizeof(float)) {
+  glGenVertexArrays(1, &bboxVAO);
+  glBindVertexArray(bboxVAO);
+
+  glGenBuffers(1, &bboxVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, bboxVBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof_bbox_vertices, nullptr, GL_DYNAMIC_DRAW);
+  // set the vertex attribute
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void writebboxvertexbuffer(
+    GLuint bboxVAO, GLuint bboxVBO, float* bboxvertices,
+    size_t sizeof_bbox_vertices = numVertices_in_cube_mesh * sizeof(float)) {
+  glBindVertexArray(bboxVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, bboxVBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof_bbox_vertices, bboxvertices,
+               GL_DYNAMIC_DRAW);
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void drawbbox(GLuint bboxVAO, Shader* bboxShader) {
+  auto model = glm::mat4(1.0f);
+
+  bboxShader->use();
+  bboxShader->setMatrix4fv("model", model);
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glBindVertexArray(bboxVAO);
+  glDrawArrays(GL_TRIANGLES, 0, 36);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+#endif  // RENDER_BBOX
 }  // namespace
+
+#ifdef RENDER_BBOX
+float render_bounding_box::start_vertex[3], render_bounding_box::end_vertex[3];
+#endif  // RENDER_BBOX
 
 __host__ void CUDA::launch_kernel(Triangle* buffer[2], unsigned numTriangles[2],
                                   Mesh meshes[2], HashTable* d_h,
@@ -481,6 +554,12 @@ int OpenGLScene::render() {
   unsigned int lightCubeVAO, lightCubeVBO;
   ::prepdrawlightingCube(lightCubeVAO, lightCubeVBO);
 
+#ifdef RENDER_BBOX
+  unsigned int bboxVAO, bboxVBO;
+  ::prepdrawbbox(bboxVAO, bboxVBO);
+  Shader* bboxShader = &lightCubeShader;
+#endif  // RENDER_BBOX
+
   this->prepdraw();
   this->registerVBO();
 
@@ -516,11 +595,25 @@ int OpenGLScene::render() {
     drawlightingCube(lightCubeVAO, &lightCubeShader);
     this->draw();
 
+#ifdef RENDER_BBOX
+    float bboxvertices[numVertices_in_cube_mesh];
+    getcuboidmeshvertices(bboxvertices, render_bounding_box::start_vertex,
+                          render_bounding_box::end_vertex);
+    ::writebboxvertexbuffer(bboxVAO, bboxVBO, bboxvertices);
+    ::drawbbox(bboxVAO, bboxShader);
+#endif  // RENDER_BBOX
+
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
   glDeleteVertexArrays(1, &lightCubeVAO);
   glDeleteBuffers(1, &lightCubeVBO);
+
+#ifdef RENDER_BBOX
+  glDeleteVertexArrays(1, &bboxVAO);
+  glDeleteBuffers(1, &bboxVBO);
+#endif  // RENDER_BBOX
+
   this->destroyGLobjs();
 
   // glfw: terminate, clearing all previously allocated GLFW resources.

@@ -46,6 +46,8 @@ target_link_libraries(test_slab glfw)
 target_link_libraries(test_slab glm)
 set_target_properties(test_slab PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+add_compile_definitions(RENDER_BBOX)
+
 if(WIN32)
 	set_target_properties(test_slab PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 	ASSIMP_COPY_BINARIES(${CMAKE_BINARY_DIR})
