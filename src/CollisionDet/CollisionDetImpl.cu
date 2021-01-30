@@ -74,6 +74,11 @@ __host__ BoundingBox getBoundingBoxEndPoints(Triangle *h_triangles,
 __host__ void initBoundingBox(Mesh mesh) {
   Triangle *h_triangles =
       (Triangle *)malloc(mesh.numTriangles * sizeof(Triangle));
+  if (h_triangles == nullptr) {
+    int NoHostMemoryForMesh = 0;
+    assert(NoHostMemoryForMesh);
+    return;
+  }
   gpuErrchk(cudaMemcpy(h_triangles, mesh.triangles,
                        mesh.numTriangles * sizeof(Triangle),
                        cudaMemcpyDefault));
@@ -109,6 +114,8 @@ __host__ void initBoundingBox(Mesh mesh) {
 
   gpuErrchk(cudaMemcpy(d_box, &h_box, sizeof(BoundingBox), cudaMemcpyDefault));
   gpuErrchk(cudaMemcpyToSymbol(box, &d_box, sizeof(BoundingBox *)));
+
+  free(h_triangles);
 }
 
 __device__ void BoundingBox::setOccupied(Voxel v) {
@@ -246,16 +253,17 @@ __global__ void markCollidingTriangles() {
 }
 
 __host__ void transformAndResetBox() {
-  glm::mat4 *trans_mat = (glm::mat4 *)malloc(sizeof(glm::mat4));
+  // glm::mat4 *trans_mat = (glm::mat4 *)malloc(sizeof(glm::mat4));
   // This is potentially a huge time drain since we do this each frame
-  gpuErrchk(cudaMemcpy(trans_mat, &CUDA::trans_mats[0], sizeof(glm::mat4),
+  glm::mat4 trans_mat = glm::mat4(1.0f);
+  gpuErrchk(cudaMemcpy(&trans_mat, &CUDA::trans_mats[0], sizeof(glm::mat4),
                        cudaMemcpyDefault));
   BoundingBox h_box;
   BoundingBox *d_box;
   gpuErrchk(cudaMemcpyFromSymbol(&d_box, box, sizeof(BoundingBox *)));
   gpuErrchk(cudaMemcpy(&h_box, d_box, sizeof(BoundingBox), cudaMemcpyDefault));
-  updatePositionVertex(h_box.start_vertex, trans_mat);
-  updatePositionVertex(h_box.end_vertex, trans_mat);
+  updatePositionVertex(h_box.start_vertex, &trans_mat);
+  updatePositionVertex(h_box.end_vertex, &trans_mat);
 
   // printf("Transformed box:\n");
   // printf("\tStart: %f %f %f\n", h_box.start_vertex[0], h_box.start_vertex[1],
@@ -280,6 +288,11 @@ __host__ void transformAndResetBox() {
 __host__ void CUDA::checkBox(Mesh mesh) {
   Triangle *h_triangles =
       (Triangle *)malloc(mesh.numTriangles * sizeof(Triangle));
+  if (h_triangles == nullptr) {
+    int NoHostMemoryForMesh = 0;
+    assert(NoHostMemoryForMesh);
+    return;
+  }
   gpuErrchk(cudaMemcpy(h_triangles, mesh.triangles,
                        mesh.numTriangles * sizeof(Triangle),
                        cudaMemcpyDefault));
@@ -310,4 +323,5 @@ __host__ void CUDA::checkBox(Mesh mesh) {
     }
     printf("\n");
   }
+  free(h_triangles);
 }
