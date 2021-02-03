@@ -55,4 +55,10 @@ __host__ void initCollisionDet(Mesh meshes[2]);
 __host__ void checkBox(Mesh mesh);
 }  // namespace CUDA
 
+#ifdef RENDER_BBOX
+namespace render_bounding_box {
+extern float start_vertex[3], end_vertex[3];
+}
+#endif  // RENDER_BBOX
+
 #endif /* COLLISION_DET_INTERFACE_CUH */

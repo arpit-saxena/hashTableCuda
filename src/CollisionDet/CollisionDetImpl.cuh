@@ -26,6 +26,7 @@ struct BoundingBox {
 
   __device__ void setOccupied(Voxel v);
   __device__ uint32_t getOccupied(int x, int y, int z);
+  __device__ uint32_t getOccupied(int idx);
 };
 
 __host__ void initHashTable(int numBuckets);
